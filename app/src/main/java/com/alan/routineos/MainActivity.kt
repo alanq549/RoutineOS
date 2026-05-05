@@ -4,44 +4,50 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.alan.routineos.core.di.AppContainer
+import com.alan.routineos.ui.navigation.AppNavHost
 import com.alan.routineos.ui.theme.RoutineOSTheme
+import com.alan.routineos.ui.viewmodel.AuthViewModel
+import com.alan.routineos.ui.viewmodel.UserViewModel
+
 
 class MainActivity : ComponentActivity() {
+
+    private val container by lazy {
+        (application as App).container
+    }
+
+    private val authViewModel by lazy {
+        AuthViewModel(
+            registerUseCase = container.registerUseCase,
+            loginUseCase = container.loginUseCase,
+            verifyEmailUseCase = container.verifyEmailCodeUseCase,
+            sessionManager = container.sessionManager,
+            userManager = container.userManager
+        )
+    }
+
+    private val userViewModel by lazy {
+        UserViewModel(
+            userManager = container.userManager,
+
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
+
         setContent {
             RoutineOSTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                AppNavHost(
+                    authViewModel = authViewModel,
+                    sessionManager = container.sessionManager,
+                    userViewModel = userViewModel
+                )
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    RoutineOSTheme {
-        Greeting("Android")
     }
 }
