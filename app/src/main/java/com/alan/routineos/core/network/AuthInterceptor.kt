@@ -4,6 +4,7 @@ import com.alan.routineos.core.session.SessionManager
 import com.alan.routineos.data.remote.auth.AuthApi
 import com.alan.routineos.data.remote.auth.refresh.RefreshRequest
 import com.alan.routineos.domain.model.AuthSession
+import dagger.Lazy
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -11,11 +12,11 @@ import okhttp3.Interceptor
 import okhttp3.Response
 import retrofit2.HttpException
 import java.io.IOException
+import javax.inject.Inject
 
-// AuthInterceptor.kt
-class AuthInterceptor(
+class AuthInterceptor @Inject constructor(
     private val sessionManager: SessionManager,
-    private val authApi: AuthApi
+    private val authApi: Lazy<AuthApi>
 ) : Interceptor {
 
     private val mutex = Mutex()
@@ -33,7 +34,6 @@ class AuthInterceptor(
             return chain.proceed(request)
         }
 
-        // ✅ Leer accessToken directo, no el objeto session
         val accessToken = sessionManager.getAccessToken()
 
         if (accessToken != null) {
@@ -54,7 +54,7 @@ class AuthInterceptor(
                     val refreshToken = sessionManager.getRefreshToken()
                         ?: return@withLock null
 
-                    val refreshResponse = authApi.refresh(RefreshRequest(refreshToken))
+                    val refreshResponse = authApi.get().refresh(RefreshRequest(refreshToken))
 
                     val updated = AuthSession(
                         accessToken = refreshResponse.accessToken,

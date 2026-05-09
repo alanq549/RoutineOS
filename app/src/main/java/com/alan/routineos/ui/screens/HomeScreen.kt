@@ -12,7 +12,7 @@ import com.alan.routineos.ui.components.TimelineHeader
 import com.alan.routineos.ui.components.mockActivities
 import com.alan.routineos.ui.theme.*
 import com.alan.routineos.ui.viewmodel.AuthViewModel
-import androidx.compose.foundation.lazy.items // IMPORTANTE para el LazyColumn
+import androidx.compose.foundation.lazy.items
 import com.alan.routineos.ui.components.ActivityTimelineItem
 import com.alan.routineos.ui.components.DailyProgressSection
 import com.alan.routineos.ui.state.UserState
@@ -22,7 +22,8 @@ import com.alan.routineos.ui.viewmodel.UserViewModel
 @Composable
 fun HomeScreen(
     authViewModel: AuthViewModel,
-    userViewModel: UserViewModel
+    userViewModel: UserViewModel,
+    onNavigateToAccount: () -> Unit
 ) {
 
     val userState by userViewModel.userState.collectAsState()
@@ -37,7 +38,8 @@ fun HomeScreen(
         topBar = {
             RoutineTopBar(
                 userName = user?.name,
-                onLogout = { authViewModel.logout() }
+                onLogout = { authViewModel.logout() },
+                onProfileClick = onNavigateToAccount
             )
         },
         floatingActionButton = {
@@ -53,14 +55,9 @@ private fun HomeScreenContent(padding: PaddingValues) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            // ❌ QUITAMOS el padding(padding) de aquí
             .padding(horizontal = 24.dp),
-
-        // ✅ PASAMOS el padding al contentPadding
-        // Esto hace que la lista empiece debajo de la TopBar,
-        // pero que al hacer scroll, los items suban y se vean tras el cristal.
         contentPadding = PaddingValues(
-            top = padding.calculateTopPadding() + 24.dp, // El espacio de la TopBar + aire extra
+            top = padding.calculateTopPadding() + 24.dp,
             bottom = 100.dp
         ),
         verticalArrangement = Arrangement.spacedBy(20.dp)

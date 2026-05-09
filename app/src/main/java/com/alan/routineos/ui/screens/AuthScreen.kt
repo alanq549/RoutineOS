@@ -1,6 +1,8 @@
 package com.alan.routineos.ui.screens
 
+import android.os.Build
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -19,37 +21,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.data.remote.auth.DevicePlatform
 import com.alan.routineos.data.remote.auth.device.DeviceRequest
 import com.alan.routineos.data.remote.auth.login.LoginRequest
 import com.alan.routineos.data.remote.auth.register.RegisterRequest
+import com.alan.routineos.ui.components.RoutineErrorCard
+import com.alan.routineos.ui.components.RoutineTextField
+import com.alan.routineos.ui.state.AuthState
+import com.alan.routineos.ui.state.AuthStep
 import com.alan.routineos.ui.state.VerifyEmailState
 import com.alan.routineos.ui.theme.BgDark
 import com.alan.routineos.ui.theme.GlassWhite
 import com.alan.routineos.ui.theme.NeonEmerald
 import com.alan.routineos.ui.theme.TextSecondary
 import com.alan.routineos.ui.viewmodel.AuthViewModel
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
-import com.alan.routineos.data.remote.auth.DevicePlatform
-import com.alan.routineos.ui.components.RoutineTextField
-import com.alan.routineos.ui.state.AuthState
-import com.alan.routineos.ui.state.AuthStep
-
-
-import android.os.Build
 
 @Composable
 fun AuthScreen(
     viewModel: AuthViewModel,
+    onLoginSuccess: () -> Unit
 ) {
 
     var step by remember { mutableStateOf(AuthStep.LOGIN) }
 
     val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
-
-    val platform = remember {
-        DevicePlatform.ANDROID // Android-only build (Compose Android)
-    }
+    val platform = DevicePlatform.ANDROID
 
     // LOGIN
     var loginEmail by remember { mutableStateOf("") }
@@ -65,8 +61,49 @@ fun AuthScreen(
     var pendingEmail by remember { mutableStateOf("") }
 
     val verifyState by viewModel.verifyState.collectAsState()
+    val authState by viewModel.authState.collectAsState()
 
-    // 🔥 Solo reacción UI a éxito de verificación
+    val authError =
+        (authState as? AuthState.Error)?.message
+
+    val verifyError =
+        (verifyState as? VerifyEmailState.Error)?.message
+
+    val loginEnabled =
+        loginEmail.isNotBlank() &&
+                loginPassword.length >= 6 &&
+                authState !is AuthState.Loading
+
+    val registerEnabled =
+        name.isNotBlank() &&
+                registerEmail.isNotBlank() &&
+                registerPassword.length >= 6
+
+    val verifyEnabled =
+        code.length == 6 &&
+                code.all { it.isDigit() } &&
+                verifyState !is VerifyEmailState.Loading
+
+    LaunchedEffect(authState) {
+
+        when (authState) {
+
+            is AuthState.EmailNotVerified -> {
+
+                pendingEmail =
+                    (authState as AuthState.EmailNotVerified).email
+
+                step = AuthStep.VERIFY
+            }
+
+            is AuthState.Authenticated -> {
+                onLoginSuccess()
+            }
+
+            else -> Unit
+        }
+    }
+
     LaunchedEffect(verifyState) {
         if (verifyState is VerifyEmailState.Success) {
             step = AuthStep.LOGIN
@@ -82,6 +119,7 @@ fun AuthScreen(
             .padding(24.dp)
     ) {
 
+        // Glow background
         Box(
             modifier = Modifier
                 .size(400.dp)
@@ -97,9 +135,11 @@ fun AuthScreen(
         )
 
         Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 72.dp),
+
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
             Text(
@@ -109,20 +149,24 @@ fun AuthScreen(
                 color = Color.White
             )
 
+            Spacer(modifier = Modifier.height(8.dp))
+
             Text(
                 text = when (step) {
-                    AuthStep.LOGIN -> "SYSTEM ACCESS // BETA"
-                    AuthStep.REGISTER -> "CREATE ACCOUNT // BETA"
-                    AuthStep.VERIFY -> "VERIFY EMAIL // BETA"
+                    AuthStep.LOGIN -> "Acceso seguro"
+                    AuthStep.REGISTER -> "Crear cuenta"
+                    AuthStep.VERIFY -> "Verificar correo"
                 },
-                fontSize = 10.sp,
-                color = NeonEmerald,
-                modifier = Modifier.padding(bottom = 30.dp)
+                fontSize = 13.sp,
+                color = TextSecondary
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .heightIn(min = 420.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .border(
                         1.dp,
@@ -136,35 +180,55 @@ fun AuthScreen(
                     )
                     .background(GlassWhite)
                     .padding(24.dp),
+
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
 
                 AnimatedContent(
                     targetState = step,
-                    transitionSpec = { fadeIn().togetherWith(fadeOut()) },
+
+                    transitionSpec = {
+                        fadeIn()
+                            .togetherWith(fadeOut())
+                            .using(SizeTransform(clip = false))
+                    },
+
                     label = "auth_flow"
                 ) { currentStep ->
 
                     when (currentStep) {
 
-                        // ================= LOGIN =================
+                        // LOGIN
                         AuthStep.LOGIN -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
 
                                 RoutineTextField(
                                     value = loginEmail,
-                                    onValueChange = { loginEmail = it },
+                                    onValueChange = {
+                                        loginEmail = it
+                                    },
                                     label = "Email",
                                     placeholder = "user@routineos.com"
                                 )
 
                                 RoutineTextField(
                                     value = loginPassword,
-                                    onValueChange = { loginPassword = it },
+                                    onValueChange = {
+                                        loginPassword = it
+                                    },
                                     label = "Password",
                                     placeholder = "••••••••",
                                     isPassword = true
                                 )
+
+                                authError?.let {
+                                    RoutineErrorCard(message = it)
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 Button(
                                     onClick = {
@@ -180,119 +244,182 @@ fun AuthScreen(
                                             )
                                         )
                                     },
+                                    enabled = loginEnabled,
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(56.dp),
+
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = NeonEmerald
                                     )
                                 ) {
-                                    Text("INICIAR SESIÓN", color = BgDark)
+
+                                    if (authState is AuthState.Loading) {
+
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = BgDark,
+                                            strokeWidth = 2.dp
+                                        )
+
+                                    } else {
+
+                                        Text(
+                                            "INICIAR SESIÓN",
+                                            color = BgDark
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        // ================= REGISTER =================
+                        // REGISTER
                         AuthStep.REGISTER -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
 
                                 RoutineTextField(
                                     value = name,
-                                    onValueChange = { name = it },
-                                    label = "Name",
+                                    onValueChange = {
+                                        name = it
+                                    },
+                                    label = "Nombre",
                                     placeholder = "Tu nombre"
                                 )
 
                                 RoutineTextField(
                                     value = registerEmail,
-                                    onValueChange = { registerEmail = it },
+                                    onValueChange = {
+                                        registerEmail = it
+                                    },
                                     label = "Email",
                                     placeholder = "user@routineos.com"
                                 )
 
                                 RoutineTextField(
                                     value = registerPassword,
-                                    onValueChange = { registerPassword = it },
+                                    onValueChange = {
+                                        registerPassword = it
+                                    },
                                     label = "Password",
                                     placeholder = "••••••••",
                                     isPassword = true
                                 )
 
+                                authError?.let {
+                                    RoutineErrorCard(message = it)
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
                                 Button(
                                     onClick = {
-                                        val request = RegisterRequest(
-                                            email = registerEmail,
-                                            password = registerPassword,
-                                            name = name,
-                                            timezone = null,
-                                            device = DeviceRequest(
-                                                platform = platform,
-                                                deviceName = deviceName,
-                                                deviceFingerprint = "routine_auth_fprint_001"
-                                            )
-                                        )
 
                                         viewModel.register(
-                                            request = request,
+                                            request = RegisterRequest(
+                                                email = registerEmail,
+                                                password = registerPassword,
+                                                name = name,
+                                                timezone = null,
+                                                device = DeviceRequest(
+                                                    platform = platform,
+                                                    deviceName = deviceName,
+                                                    deviceFingerprint = "routine_auth_fprint_001"
+                                                )
+                                            ),
+
                                             onCodeSent = {
                                                 pendingEmail = registerEmail
                                                 step = AuthStep.VERIFY
                                             }
                                         )
                                     },
+
+                                    enabled = registerEnabled,
+
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(56.dp),
+
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = NeonEmerald
                                     )
                                 ) {
-                                    Text("CREAR CUENTA", color = BgDark)
+
+                                    Text(
+                                        "CREAR CUENTA",
+                                        color = BgDark
+                                    )
                                 }
                             }
                         }
 
-                        // ================= VERIFY =================
+                        // VERIFY
                         AuthStep.VERIFY -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                                Text("We sent a code to:", color = TextSecondary)
-                                Text(pendingEmail, color = Color.White)
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+
+                                Text(
+                                    text = "Enviamos un código a:",
+                                    color = TextSecondary
+                                )
+
+                                Text(
+                                    text = pendingEmail,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Medium
+                                )
 
                                 RoutineTextField(
                                     value = code,
-                                    onValueChange = { code = it },
-                                    label = "Code",
+                                    onValueChange = {
+                                        code = it
+                                    },
+                                    label = "Código",
                                     placeholder = "123456"
                                 )
+
+                                verifyError?.let {
+                                    RoutineErrorCard(message = it)
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 Button(
                                     onClick = {
                                         viewModel.verifyEmailCode(code)
                                     },
-                                    enabled = verifyState !is VerifyEmailState.Loading,
+
+                                    enabled = verifyEnabled,
+
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(56.dp),
+
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = NeonEmerald
                                     )
                                 ) {
+
                                     if (verifyState is VerifyEmailState.Loading) {
+
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(20.dp),
+                                            color = BgDark,
+                                            strokeWidth = 2.dp
+                                        )
+
+                                    } else {
+
+                                        Text(
+                                            "VERIFICAR",
                                             color = BgDark
                                         )
-                                    } else {
-                                        Text("VERIFY", color = BgDark)
                                     }
-                                }
-
-                                if (verifyState is VerifyEmailState.Error) {
-                                    Text(
-                                        text = (verifyState as VerifyEmailState.Error).message,
-                                        color = Color.Red
-                                    )
                                 }
                             }
                         }
@@ -300,21 +427,28 @@ fun AuthScreen(
                 }
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             if (step != AuthStep.VERIFY) {
+
                 Text(
-                    text = if (step == AuthStep.LOGIN)
-                        "¿No tienes cuenta? Regístrate"
-                    else
-                        "¿Ya tienes cuenta? Inicia sesión",
+                    text =
+                        if (step == AuthStep.LOGIN) {
+                            "¿No tienes cuenta? Regístrate"
+                        } else {
+                            "¿Ya tienes cuenta? Inicia sesión"
+                        },
+
                     color = TextSecondary,
+
                     modifier = Modifier.clickable {
+
                         step =
-                            if (step == AuthStep.LOGIN)
+                            if (step == AuthStep.LOGIN) {
                                 AuthStep.REGISTER
-                            else
+                            } else {
                                 AuthStep.LOGIN
+                            }
                     }
                 )
             }

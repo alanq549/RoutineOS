@@ -7,8 +7,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import retrofit2.HttpException
 import java.io.IOException
+import javax.inject.Inject
 
-class UserManager(
+class UserManager @Inject constructor(
     private val repository: UserRepository,
 ) {
 

@@ -9,7 +9,9 @@ import com.alan.routineos.data.remote.auth.register.RegisterRequest
 import com.alan.routineos.data.remote.auth.register.RegisterResponse
 import com.alan.routineos.data.remote.auth.verify.VerifyEmailCodeRequest
 import com.alan.routineos.data.remote.auth.verify.VerifyEmailResponse
-class AuthRepository(
+import javax.inject.Inject
+
+class AuthRepository  @Inject constructor(
     private val api: AuthApi
 ) {
 

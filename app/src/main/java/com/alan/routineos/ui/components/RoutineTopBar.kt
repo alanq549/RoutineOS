@@ -6,17 +6,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.alan.routineos.ui.state.UserState
 import com.alan.routineos.ui.theme.BgDark
 import com.alan.routineos.ui.theme.JetBrainsMono
 import com.alan.routineos.ui.theme.NeonEmerald
 import com.alan.routineos.ui.theme.TextPrimary
-import com.alan.routineos.ui.viewmodel.UserViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -25,7 +21,8 @@ import java.util.Locale
 @Composable
 fun RoutineTopBar(
     userName: String?,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onProfileClick: () -> Unit
 ) {
     val currentDate = LocalDate.now().format(
         DateTimeFormatter.ofPattern("EEEE, d 'de' MMMM", Locale("es", "ES"))
@@ -62,8 +59,11 @@ fun RoutineTopBar(
         },
         navigationIcon = {
             Box(modifier = Modifier.padding(start = 8.dp)) {
-                UserMenu(onLogout = onLogout,
-                    userName = userName)
+                UserMenu(
+                    onLogout = onLogout,
+                    userName = userName,
+                    onProfileClick = onProfileClick
+                )
             }
         },
         actions = { Spacer(modifier = Modifier.size(48.dp)) },

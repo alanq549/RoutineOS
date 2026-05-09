@@ -5,13 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -23,7 +24,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.theme.NeonEmerald
-import com.alan.routineos.ui.theme.TextSecondary
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,11 +34,13 @@ fun RoutineTextField(
     placeholder: String,
     isPassword: Boolean = false
 ) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
     Column {
         Text(
             text = label.uppercase(),
-            fontSize = 10.sp, // Un pelín más grande para legibilidad
-            color = NeonEmerald.copy(alpha = 0.7f), // Color neón suave para el label
+            fontSize = 10.sp,
+            color = NeonEmerald.copy(alpha = 0.7f),
             fontWeight = FontWeight.ExtraBold,
             letterSpacing = 1.sp,
             modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
@@ -57,7 +59,6 @@ fun RoutineTextField(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                // Borde sutil para que parezca cristal tallado
                 .border(
                     width = 1.dp,
                     brush = Brush.horizontalGradient(
@@ -68,24 +69,34 @@ fun RoutineTextField(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 )
-                .background(Color.Black.copy(alpha = 0.3f)), // Un fondo un poco más oscuro mejora el contraste
+                .background(Color.Black.copy(alpha = 0.3f)),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
-
-                // Eliminamos la línea de abajo que rompe el "Glass"
                 focusedIndicatorColor = Color.Transparent,
                 unfocusedIndicatorColor = Color.Transparent,
                 disabledIndicatorColor = Color.Transparent,
-
                 cursorColor = NeonEmerald,
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White
             ),
-            visualTransformation = if (isPassword) PasswordVisualTransformation() else VisualTransformation.None,
+            visualTransformation = if (isPassword && !passwordVisible) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(
                 keyboardType = if (isPassword) KeyboardType.Password else KeyboardType.Email
             ),
+            trailingIcon = if (isPassword) {
+                {
+                    val image = if (passwordVisible)
+                        Icons.Filled.Visibility
+                    else Icons.Filled.VisibilityOff
+
+                    val description = if (passwordVisible) "Hide password" else "Show password"
+
+                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                        Icon(imageVector = image, contentDescription = description, tint = NeonEmerald.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                    }
+                }
+            } else null,
             singleLine = true
         )
     }

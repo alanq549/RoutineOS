@@ -5,25 +5,25 @@ import com.alan.routineos.data.remote.auth.AuthApi
 import com.alan.routineos.data.remote.auth.Logout.LogoutRequest
 import com.alan.routineos.data.remote.auth.refresh.RefreshRequest
 import com.alan.routineos.domain.model.AuthSession
-
+import dagger.Lazy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.io.IOException
 import retrofit2.HttpException
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class SessionManager(
+@Singleton
+class SessionManager @Inject constructor(
     private val tokenDataStore: TokenDataStore,
-    private val authApi: AuthApi
-
+    private val authApi: Lazy<AuthApi>
 ) {
 
     private val _session = MutableStateFlow<AuthSession?>(null)
     val session: StateFlow<AuthSession?> = _session
 
-    // ✅ Acceso síncrono directo — para el interceptor
     fun getAccessToken(): String? = _session.value?.accessToken
     fun getRefreshToken(): String? = _session.value?.refreshToken
-
 
     suspend fun loadSession() {
         val access = tokenDataStore.getAccessToken()
@@ -34,11 +34,10 @@ class SessionManager(
             return
         }
 
-        // ✔ acceso inmediato (offline-first)
         _session.value = AuthSession(access, refresh)
 
         try {
-            val response = authApi.refresh(
+            val response = authApi.get().refresh(
                 RefreshRequest(refresh)
             )
 
@@ -55,14 +54,11 @@ class SessionManager(
             _session.value = newSession
 
         } catch (e: IOException) {
-            // 🔥 SIN INTERNET → NO haces logout
-            // simplemente mantienes la sesión actual
+            // Offline - keep current session
         } catch (e: HttpException) {
-            // 🔥 ERROR DEL BACKEND (ej: 401)
             clear()
         }
     }
-
 
     suspend fun saveSession(session: AuthSession) {
         tokenDataStore.saveTokens(
@@ -82,13 +78,12 @@ class SessionManager(
 
         try {
             if (refresh != null) {
-                authApi.logout(LogoutRequest(refresh))
+                authApi.get().logout(LogoutRequest(refresh))
             }
         } catch (e: Exception) {
-            // 🔥 ignoras error (offline, etc)
+            // Ignore errors (offline, etc)
         }
 
-        // 🔴 SIEMPRE limpiar local
         clear()
     }
 }

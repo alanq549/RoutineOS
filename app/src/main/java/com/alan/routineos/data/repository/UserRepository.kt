@@ -5,8 +5,9 @@ import com.alan.routineos.data.mapper.user.toDomain
 import com.alan.routineos.data.mapper.user.toEntity
 import com.alan.routineos.data.remote.user.UserApi
 import com.alan.routineos.domain.model.UserProfile
+import javax.inject.Inject
 
-class UserRepository(
+class UserRepository  @Inject constructor(
     private val api: UserApi,
     private val dao: UserDao
 ) {

@@ -4,11 +4,15 @@ import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import javax.inject.Inject
+import javax.inject.Singleton
 
 private val Context.deviceDataStore by preferencesDataStore(name = "device_prefs")
 
-class DeviceDataStore(private val context: Context) {
+@Singleton
+class DeviceDataStore @Inject constructor(@ApplicationContext private val context: Context) {
 
     companion object {
         private val DEVICE_ID = stringPreferencesKey("device_id")

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,12 +22,12 @@ import com.alan.routineos.ui.theme.TextSecondary
 @Composable
 fun UserMenu(
     userName: String?,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onProfileClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Box {
-        // El disparador: Icono de 3 barras neón
         IconButton(
             onClick = { expanded = true },
             modifier = Modifier
@@ -41,64 +42,50 @@ fun UserMenu(
             )
         }
 
-        // El menú con estilo Glass
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
             modifier = Modifier
-                .background(BgDark.copy(alpha = 0.9f)) // Casi opaco para legibilidad
+                .background(BgDark.copy(alpha = 0.95f))
                 .border(1.dp, NeonEmerald.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
                 .padding(horizontal = 4.dp)
         ) {
-            // Opción: Perfil (Próximamente)
             if (userName != null) {
                 DropdownMenuItem(
                     text = {
                         Text(
-                            "Hola $userName",
+                            "MI CUENTA",
                             fontSize = 12.sp,
-                            color = TextSecondary
+                            color = Color.White,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                         )
                     },
-                    onClick = {},
-                    enabled = false
+                    leadingIcon = {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = NeonEmerald, modifier = Modifier.size(18.dp))
+                    },
+                    onClick = {
+                        expanded = false
+                        onProfileClick()
+                    }
+                )
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = Color.White.copy(alpha = 0.1f)
                 )
             }
 
-            // Opción: Configuración (Próximamente)
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        "SETTINGS // BEYOND",
-                        fontSize = 12.sp,
-                        color = TextSecondary.copy(alpha = 0.5f)
-                    )
-                },
-                onClick = { /* Próximamente */ },
-                enabled = false
-            )
-
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 4.dp),
-                color = Color.White.copy(alpha = 0.1f)
-            )
-
-            // Opción: Cerrar Sesión (Activa)
             DropdownMenuItem(
                 text = {
                     Text(
                         "CERRAR SESIÓN",
                         fontSize = 12.sp,
-                        color = Color.White,
-                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                        color = Color.White.copy(alpha = 0.7f)
                     )
                 },
                 onClick = {
                     expanded = false
                     onLogout()
-                },
-                leadingIcon = {
-                    // Puedes añadir un icono pequeño aquí si quieres
                 }
             )
         }
