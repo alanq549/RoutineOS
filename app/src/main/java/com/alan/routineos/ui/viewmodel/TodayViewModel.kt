@@ -97,6 +97,7 @@ class TodayViewModel @Inject constructor(
                 )
                 instanceRepo.upsert(newInstance)
 
+                // Copiar árbol de nodos del template -> nodos de instancia
                 val templateNodes = nodeRepo.getAllByTemplate(template.id)
                 val idMap = mutableMapOf<String, String>()
                 templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
@@ -105,7 +106,7 @@ class TodayViewModel @Inject constructor(
                     tNode.copy(
                         id = idMap[tNode.id]!!,
                         parentId = idMap[tNode.parentId],
-                        templateId = null,
+                        templateId = tNode.id, // Mantenemos referencia al ID del nodo original del template
                         instanceId = newInstance.id,
                         status = NodeStatus.PENDING,
                         createdAt = System.currentTimeMillis(),

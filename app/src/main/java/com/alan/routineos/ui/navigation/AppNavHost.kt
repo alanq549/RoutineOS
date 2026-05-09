@@ -35,14 +35,15 @@ fun AppNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // Esperar a que cargue el estado de onboarding
     if (isOnboardingCompleted == null) return
 
     val startDestination = if (isOnboardingCompleted == true) Screen.Today.route else "onboarding"
 
-    val showBottomBar = bottomNavItems.any { it.route == currentDestination?.route } &&
-            currentDestination?.route != Screen.Execute.route &&
-            currentDestination?.route != "onboarding"
+    // Fix: Match against the route pattern to correctly hide BottomBar on Execute detail
+    val currentRoute = currentDestination?.route
+    val showBottomBar = bottomNavItems.any { it.route == currentRoute } &&
+            currentRoute != Screen.Execute.route &&
+            currentRoute != "onboarding"
 
     Scaffold(
         bottomBar = {
@@ -97,9 +98,8 @@ fun AppNavHost(
                 }) 
             }
             composable(Screen.Planner.route) { PlannerScreen() }
-            composable(Screen.Execute.route) { backStackEntry ->
-                val nodeId = backStackEntry.arguments?.getString("nodeId")
-                ExecuteScreen(nodeId)
+            composable(Screen.Execute.route) {
+                ExecuteScreen(onBack = { navController.popBackStack() })
             }
             composable(Screen.Library.route) { LibraryScreen() }
             composable(Screen.Stats.route) { StatsScreen() }

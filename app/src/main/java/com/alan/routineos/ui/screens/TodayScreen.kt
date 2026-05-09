@@ -74,7 +74,7 @@ fun TodayScreen(
                 ) {
                     val rootNodes = uiState.nodes.filter { it.parentId == null }
                     
-                    items(rootNodes) { node ->
+                    items(rootNodes, key = { it.id }) { node ->
                         NodeWithChildren(
                             node = node,
                             allNodes = uiState.nodes,
@@ -135,7 +135,8 @@ fun NodeWithChildren(
             onClick = { 
                 if (children.isNotEmpty()) expanded = !expanded
                 else onClick(node)
-            }
+            },
+            onLongClick = { onLongClick(node) }
         )
         
         if (expanded && children.isNotEmpty()) {
@@ -299,7 +300,7 @@ fun NodeOptionsBottomSheet(
         ) {
             Text(node.name, style = MaterialTheme.typography.headlineSmall, color = ColorText)
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             ListItem(
                 headlineContent = { Text("Saltar") },
                 modifier = Modifier.clickable { onStatusChange(NodeStatus.SKIPPED) },
@@ -308,6 +309,11 @@ fun NodeOptionsBottomSheet(
             ListItem(
                 headlineContent = { Text("Posponer") },
                 modifier = Modifier.clickable { onStatusChange(NodeStatus.POSTPONED) },
+                colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+            )
+            ListItem(
+                headlineContent = { Text("Pendiente") },
+                modifier = Modifier.clickable { onStatusChange(NodeStatus.PENDING) },
                 colors = ListItemDefaults.colors(containerColor = Color.Transparent)
             )
         }

@@ -18,6 +18,9 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE id = :id")
     suspend fun getById(id: String): Node?
 
+    @Query("SELECT * FROM nodes WHERE templateId = :templateId AND instanceId IS NOT NULL AND id != :currentNodeId ORDER BY createdAt DESC LIMIT 10")
+    suspend fun getPreviousInstances(templateId: String, currentNodeId: String): List<Node>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(node: Node)
 
