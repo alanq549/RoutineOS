@@ -39,7 +39,6 @@ fun AppNavHost(
 
     val startDestination = if (isOnboardingCompleted == true) Screen.Today.route else "onboarding"
 
-    // Fix: Match against the route pattern to correctly hide BottomBar on Execute detail
     val currentRoute = currentDestination?.route
     val showBottomBar = bottomNavItems.any { it.route == currentRoute } &&
             currentRoute != Screen.Execute.route &&
@@ -101,7 +100,22 @@ fun AppNavHost(
             composable(Screen.Execute.route) {
                 ExecuteScreen(onBack = { navController.popBackStack() })
             }
-            composable(Screen.Library.route) { LibraryScreen() }
+            composable(Screen.Library.route) { 
+                LibraryScreen(
+                    onNavigateToBuilder = { templateId ->
+                        navController.navigate(Screen.TemplateBuilder.createRoute(templateId))
+                    },
+                    onNavigateToTypes = {
+                        navController.navigate(Screen.NodeTypeManager.route)
+                    }
+                ) 
+            }
+            composable(Screen.TemplateBuilder.route) {
+                TemplateBuilderScreen(onBack = { navController.popBackStack() })
+            }
+            composable(Screen.NodeTypeManager.route) {
+                NodeTypeManagerScreen(onBack = { navController.popBackStack() })
+            }
             composable(Screen.Stats.route) { StatsScreen() }
         }
     }

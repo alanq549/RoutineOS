@@ -3,20 +3,10 @@ package com.alan.routineos.ui.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.alan.routineos.data.local.entities.FieldType
-import com.alan.routineos.data.local.entities.Node
-import com.alan.routineos.data.local.entities.NodeFieldValue
-import com.alan.routineos.data.local.entities.NodeMetadataSchema
-import com.alan.routineos.data.local.entities.NodeStatus
-import com.alan.routineos.data.local.entities.NodeType
-import com.alan.routineos.data.repository.FieldValueRepository
-import com.alan.routineos.data.repository.MetadataSchemaRepository
-import com.alan.routineos.data.repository.NodeRepository
-import com.alan.routineos.data.repository.NodeTypeRepository
+import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.data.repository.*
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -29,7 +19,7 @@ data class ExecuteUiState(
     val draftValues: Map<String, String> = emptyMap(),
     val history: List<HistorySession> = emptyList(),
     val isLoading: Boolean = true,
-    val shouldStartTimer: Int? = null // Minutes to start timer
+    val shouldStartTimer: Int? = null
 )
 
 data class HistorySession(
@@ -60,38 +50,37 @@ class ExecuteViewModel @Inject constructor(
             val node = nodeRepo.getById(nodeId) ?: return@launch
             val parentNode = node.parentId?.let { nodeRepo.getById(it) }
             val type = typeRepo.getById(node.typeId) ?: return@launch
+            
+            val schemasFlow = schemaRepo.getByTypeId(type.id)
+            val valuesFlow = valueRepo.getByNode(node.id)
 
-            val schemas = schemaRepo.getByTypeId(type.id).first()
-            val existingValues = valueRepo.getByNode(node.id).first()
-
-            // Default values: either from DB or from Schema default
-            val initialDraft = schemas.associate { schema ->
-                val existing = existingValues.find { it.schemaId == schema.id }
-                schema.fieldName to (existing?.value ?: schema.defaultValue ?: "")
-            }
-
-            valueRepo.getByNode(node.id).collect { values ->
-                val history = values.groupBy { it.updatedAt / 1000 }
+            combine(schemasFlow, valuesFlow) { schemas, values ->
+                val history = values.groupBy { it.updatedAt / 1000 } 
                     .map { (time, vals) -> HistorySession(time * 1000, vals) }
                     .sortedByDescending { it.date }
 
-                _uiState.value = _uiState.value.copy(
+                val draft = schemas.associate { schema ->
+                    val existing = values.find { it.schemaId == schema.id }
+                    schema.fieldName to (existing?.value ?: schema.defaultValue ?: "")
+                }
+
+                _uiState.update { it.copy(
                     node = node,
                     parentNode = parentNode,
                     nodeType = type,
                     schemas = schemas,
-                    draftValues = initialDraft,
+                    draftValues = draft,
                     history = history,
                     isLoading = false
-                )
-            }
+                ) }
+            }.collect()
         }
     }
 
     fun updateDraftValue(fieldName: String, value: String) {
-        _uiState.value = _uiState.value.copy(
-            draftValues = _uiState.value.draftValues + (fieldName to value)
-        )
+        _uiState.update { it.copy(
+            draftValues = it.draftValues + (fieldName to value)
+        ) }
     }
 
     fun saveIteration() {
@@ -99,11 +88,9 @@ class ExecuteViewModel @Inject constructor(
             val state = _uiState.value
             val node = state.node ?: return@launch
             val timestamp = System.currentTimeMillis()
+            
+            _uiState.update { it.copy(shouldStartTimer = null) }
 
-            // Reset timer signal
-            _uiState.value = _uiState.value.copy(shouldStartTimer = null)
-
-            // 1. Save values
             state.draftValues.forEach { (fieldName, value) ->
                 val schema = state.schemas.find { it.fieldName == fieldName } ?: return@forEach
                 valueRepo.upsert(
@@ -118,13 +105,11 @@ class ExecuteViewModel @Inject constructor(
                 )
             }
 
-            // 2. Logic for iterative fields (sets/series)
-            val seriesField = state.schemas.find {
+            val seriesField = state.schemas.find { 
                 val name = it.fieldName.lowercase()
-                name.contains("ser") || name.contains("set")
+                name.contains("ser") || name.contains("set") 
             }
-
-            // 3. Logic for timer (only if hasMetricFields is true and field is DURATION)
+            
             var durationToStart: Int? = null
             if (state.nodeType?.hasMetricFields == true) {
                 val durationField = state.schemas.find { it.fieldType == FieldType.DURATION }
@@ -137,7 +122,7 @@ class ExecuteViewModel @Inject constructor(
                 val currentSeries = state.draftValues[seriesField.fieldName]?.toIntOrNull() ?: 0
                 if (currentSeries > 1) {
                     updateDraftValue(seriesField.fieldName, (currentSeries - 1).toString())
-                    _uiState.value = _uiState.value.copy(shouldStartTimer = durationToStart)
+                    _uiState.update { it.copy(shouldStartTimer = durationToStart) }
                 } else {
                     completeNode()
                 }
@@ -147,15 +132,10 @@ class ExecuteViewModel @Inject constructor(
         }
     }
 
-    fun completeNode() {
+    private fun completeNode() {
         viewModelScope.launch {
             val node = _uiState.value.node ?: return@launch
-            nodeRepo.update(
-                node.copy(
-                    status = NodeStatus.COMPLETED,
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
+            nodeRepo.update(node.copy(status = NodeStatus.COMPLETED, updatedAt = System.currentTimeMillis()))
         }
     }
 }
