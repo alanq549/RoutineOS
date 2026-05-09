@@ -1,0 +1,163 @@
+package com.alan.routineos.ui.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.alan.routineos.core.util.DateUtils
+import com.alan.routineos.data.local.entities.DayInstance
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeStatus
+import com.alan.routineos.data.local.entities.NodeType
+import com.alan.routineos.data.repository.*
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
+import java.util.Calendar
+import java.util.UUID
+import javax.inject.Inject
+
+data class TodayUiState(
+    val instance: DayInstance? = null,
+    val nodes: List<Node> = emptyList(),
+    val nodeTypes: List<NodeType> = emptyList(),
+    val isLoading: Boolean = true,
+    val currentTime: String = ""
+)
+
+@HiltViewModel
+class TodayViewModel @Inject constructor(
+    private val instanceRepo: InstanceRepository,
+    private val scheduleRepo: ScheduleRepository,
+    private val exceptionRepo: ScheduleExceptionRepository,
+    private val nodeRepo: NodeRepository,
+    private val templateRepo: TemplateRepository,
+    private val nodeTypeRepo: NodeTypeRepository
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(TodayUiState())
+    val uiState = _uiState.asStateFlow()
+
+    init {
+        observeTodayData()
+        loadNodeTypes()
+        updateTimeTicker()
+    }
+
+    private fun loadNodeTypes() {
+        viewModelScope.launch {
+            nodeTypeRepo.getAll().collect { types ->
+                _uiState.value = _uiState.value.copy(nodeTypes = types)
+            }
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeTodayData() {
+        val today = DateUtils.getStartOfDay()
+        val weekday = DateUtils.getDayOfWeek()
+
+        viewModelScope.launch {
+            instanceRepo.getByDate(today)
+                .onEach { instance ->
+                    if (instance == null) {
+                        generateInstanceIfNeeded(today, weekday)
+                    }
+                }
+                .filterNotNull()
+                .flatMapLatest { instance ->
+                    nodeRepo.getByInstance(instance.id).map { nodes ->
+                        instance to nodes
+                    }
+                }
+                .collect { (instance, nodes) ->
+                    _uiState.value = _uiState.value.copy(
+                        instance = instance,
+                        nodes = nodes,
+                        isLoading = false
+                    )
+                }
+        }
+    }
+
+    private suspend fun generateInstanceIfNeeded(today: Long, weekday: Int) {
+        val exceptions = exceptionRepo.getActiveForDate(today).first()
+        if (exceptions.any { it.affectsGeneration }) {
+            _uiState.value = _uiState.value.copy(isLoading = false)
+            return
+        }
+
+        val activeSchedules = scheduleRepo.getActiveForWeekday(weekday, today).first()
+        activeSchedules.forEach { schedule ->
+            val template = templateRepo.getById(schedule.templateId)
+            if (template != null) {
+                val newInstance = DayInstance(
+                    templateId = template.id,
+                    date = today
+                )
+                instanceRepo.upsert(newInstance)
+
+                val templateNodes = nodeRepo.getAllByTemplate(template.id)
+                val idMap = mutableMapOf<String, String>()
+                templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
+
+                val instanceNodes = templateNodes.map { tNode ->
+                    tNode.copy(
+                        id = idMap[tNode.id]!!,
+                        parentId = idMap[tNode.parentId],
+                        templateId = null,
+                        instanceId = newInstance.id,
+                        status = NodeStatus.PENDING,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
+                    )
+                }
+                nodeRepo.insertAll(instanceNodes)
+            }
+        }
+        
+        if (activeSchedules.isEmpty()) {
+            _uiState.value = _uiState.value.copy(isLoading = false)
+        }
+    }
+
+    private fun updateTimeTicker() {
+        viewModelScope.launch {
+            while (true) {
+                val cal = Calendar.getInstance()
+                val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
+                val min = cal.get(Calendar.MINUTE).toString().padStart(2, '0')
+                _uiState.value = _uiState.value.copy(currentTime = "$hour:$min")
+                delay(60_000)
+            }
+        }
+    }
+
+    fun toggleNodeCompletion(node: Node) {
+        viewModelScope.launch {
+            val newStatus = if (node.status == NodeStatus.COMPLETED) NodeStatus.PENDING else NodeStatus.COMPLETED
+            nodeRepo.update(node.copy(status = newStatus, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun updateNodeStatus(node: Node, status: NodeStatus) {
+        viewModelScope.launch {
+            nodeRepo.update(node.copy(status = status, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun addAdHocNode(name: String, typeId: String, parentId: String?) {
+        val instanceId = _uiState.value.instance?.id ?: return
+        viewModelScope.launch {
+            val newNode = Node(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                typeId = typeId,
+                parentId = parentId,
+                instanceId = instanceId,
+                status = NodeStatus.PENDING
+            )
+            nodeRepo.upsert(newNode)
+        }
+    }
+}

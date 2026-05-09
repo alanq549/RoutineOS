@@ -1,19 +1,12 @@
 package com.alan.routineos.ui.navigation
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.ViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -21,62 +14,48 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.alan.routineos.core.datastore.SettingsDataStore
 import com.alan.routineos.ui.screens.*
-import com.alan.routineos.ui.state.AuthState
 import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.ui.theme.NeonEmerald
-import com.alan.routineos.ui.viewmodel.AuthViewModel
-import com.alan.routineos.ui.viewmodel.UserViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+
+@HiltViewModel
+class NavViewModel @Inject constructor(
+    val settingsDataStore: SettingsDataStore
+) : ViewModel()
 
 @Composable
 fun AppNavHost(
-    navController: NavHostController = rememberNavController()
+    navController: NavHostController = rememberNavController(),
+    navViewModel: NavViewModel = hiltViewModel()
 ) {
+    val isOnboardingCompleted by navViewModel.settingsDataStore.isOnboardingCompleted.collectAsState(initial = null)
+    
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    val userViewModel: UserViewModel = hiltViewModel()
-    val authViewModel: AuthViewModel = hiltViewModel()
+    // Esperar a que cargue el estado de onboarding
+    if (isOnboardingCompleted == null) return
 
-    val authState by authViewModel.authState.collectAsState()
+    val startDestination = if (isOnboardingCompleted == true) Screen.Today.route else "onboarding"
 
-    // Manejo de navegación global persistente
-    LaunchedEffect(authState) {
-        when (authState) {
-            is AuthState.Unauthenticated -> {
-                if (currentDestination?.route != Screen.Auth.route) {
-                    navController.navigate(Screen.Auth.route) {
-                        popUpTo(0) { inclusive = true }
-                    }
-                }
-            }
-
-            is AuthState.Authenticated -> {
-                if (currentDestination?.route == Screen.Auth.route) {
-                    navController.navigate(Screen.Today.route) {
-                        popUpTo(Screen.Auth.route) { inclusive = true }
-                    }
-                }
-            }
-            else -> {}
-        }
-    }
-
-    val showBottomBar = bottomNavItems.any { it.route == currentDestination?.route }
+    val showBottomBar = bottomNavItems.any { it.route == currentDestination?.route } &&
+            currentDestination?.route != Screen.Execute.route &&
+            currentDestination?.route != "onboarding"
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar && authState is AuthState.Authenticated) {
+            if (showBottomBar) {
                 NavigationBar(
                     containerColor = ColorSurface,
                     tonalElevation = NavigationBarDefaults.Elevation
                 ) {
                     bottomNavItems.forEach { screen ->
-                        val selected =
-                            currentDestination?.hierarchy?.any { it.route == screen.route } == true
+                        val selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true
                         NavigationBarItem(
-                            icon = {
-                                screen.icon?.let { Icon(it, contentDescription = screen.title) }
+                            icon = { 
+                                screen.icon?.let { Icon(it, contentDescription = screen.title) } 
                             },
                             label = { Text(screen.title) },
                             selected = selected,
@@ -100,57 +79,30 @@ fun AppNavHost(
             }
         }
     ) { innerPadding ->
-        if (authState is AuthState.Loading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = NeonEmerald)
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable("onboarding") {
+                OnboardingScreen(onFinish = {
+                    navController.navigate(Screen.Today.route) {
+                        popUpTo("onboarding") { inclusive = true }
+                    }
+                })
             }
-        } else {
-            NavHost(
-                navController = navController,
-                startDestination = if (authState is AuthState.Authenticated)
-                    Screen.Today.route else Screen.Auth.route,
-                modifier = Modifier.padding(innerPadding),
-                enterTransition = { fadeIn(animationSpec = tween(300)) },
-                exitTransition = { fadeOut(animationSpec = tween(300)) }
-            ) {
-                composable(Screen.Today.route) {
-                    HomeScreen(
-                        authViewModel = authViewModel,
-                        userViewModel = userViewModel,
-                        onNavigateToAccount = { navController.navigate(Screen.Account.route) }
-                    )
-                }
-                composable(Screen.Planner.route) { PlannerScreen() }
-                composable(Screen.Execute.route) { backStackEntry ->
-                    val nodeId = backStackEntry.arguments?.getString("nodeId")
-                    ExecuteScreen(nodeId)
-                }
-                composable(Screen.Library.route) { LibraryScreen() }
-                composable(Screen.Stats.route) { StatsScreen() }
-
-                composable(
-                    route = Screen.Account.route,
-                    enterTransition = { slideInHorizontally(initialOffsetX = { it }) + fadeIn() },
-                    exitTransition = { slideOutHorizontally(targetOffsetX = { it }) + fadeOut() }
-                ) {
-                    AccountScreen(
-                        userViewModel = userViewModel,
-                        onBack = { navController.popBackStack() },
-                        onLogout = { authViewModel.logout() }
-                    )
-                }
-
-                composable(Screen.Auth.route) {
-                    AuthScreen(
-                        viewModel = authViewModel,
-                        onLoginSuccess = {
-                            navController.navigate(Screen.Today.route) {
-                                popUpTo(Screen.Auth.route) { inclusive = true }
-                            }
-                        }
-                    )
-                }
+            composable(Screen.Today.route) { 
+                TodayScreen(onNavigateToExecute = { nodeId ->
+                    navController.navigate(Screen.Execute.createRoute(nodeId))
+                }) 
             }
+            composable(Screen.Planner.route) { PlannerScreen() }
+            composable(Screen.Execute.route) { backStackEntry ->
+                val nodeId = backStackEntry.arguments?.getString("nodeId")
+                ExecuteScreen(nodeId)
+            }
+            composable(Screen.Library.route) { LibraryScreen() }
+            composable(Screen.Stats.route) { StatsScreen() }
         }
     }
 }

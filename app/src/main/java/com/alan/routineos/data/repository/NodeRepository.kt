@@ -13,10 +13,14 @@ class NodeRepository @Inject constructor(
     fun getChildren(parentId: String): Flow<List<Node>> = nodeDao.getChildren(parentId)
     
     fun getByInstance(instanceId: String): Flow<List<Node>> = nodeDao.getByInstance(instanceId)
+
+    suspend fun getAllByTemplate(templateId: String): List<Node> = nodeDao.getAllByTemplate(templateId)
     
     suspend fun getById(id: String): Node? = nodeDao.getById(id)
     
     suspend fun upsert(node: Node) = nodeDao.upsert(node)
+
+    suspend fun insertAll(nodes: List<Node>) = nodeDao.insertAll(nodes)
     
     suspend fun update(node: Node) = nodeDao.update(node)
 }
