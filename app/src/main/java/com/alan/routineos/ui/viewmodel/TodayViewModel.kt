@@ -31,7 +31,6 @@ class TodayViewModel @Inject constructor(
     private val scheduleRepo: ScheduleRepository,
     private val exceptionRepo: ScheduleExceptionRepository,
     private val nodeRepo: NodeRepository,
-    private val templateRepo: TemplateRepository,
     private val nodeTypeRepo: NodeTypeRepository
 ) : ViewModel() {
 
@@ -47,7 +46,7 @@ class TodayViewModel @Inject constructor(
     private fun loadNodeTypes() {
         viewModelScope.launch {
             nodeTypeRepo.getAll().collect { types ->
-                _uiState.value = _uiState.value.copy(nodeTypes = types)
+                _uiState.update { it.copy(nodeTypes = types) }
             }
         }
     }
@@ -71,11 +70,11 @@ class TodayViewModel @Inject constructor(
                     }
                 }
                 .collect { (instance, nodes) ->
-                    _uiState.value = _uiState.value.copy(
+                    _uiState.update { it.copy(
                         instance = instance,
                         nodes = nodes,
                         isLoading = false
-                    )
+                    ) }
                 }
         }
     }
@@ -83,42 +82,17 @@ class TodayViewModel @Inject constructor(
     private suspend fun generateInstanceIfNeeded(today: Long, weekday: Int) {
         val exceptions = exceptionRepo.getActiveForDate(today).first()
         if (exceptions.any { it.affectsGeneration }) {
-            _uiState.value = _uiState.value.copy(isLoading = false)
+            _uiState.update { it.copy(isLoading = false) }
             return
         }
 
         val activeSchedules = scheduleRepo.getActiveForWeekday(weekday, today).first()
         activeSchedules.forEach { schedule ->
-            val template = templateRepo.getById(schedule.templateId)
-            if (template != null) {
-                val newInstance = DayInstance(
-                    templateId = template.id,
-                    date = today
-                )
-                instanceRepo.upsert(newInstance)
-
-                // Copiar árbol de nodos del template -> nodos de instancia
-                val templateNodes = nodeRepo.getAllByTemplate(template.id)
-                val idMap = mutableMapOf<String, String>()
-                templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
-
-                val instanceNodes = templateNodes.map { tNode ->
-                    tNode.copy(
-                        id = idMap[tNode.id]!!,
-                        parentId = idMap[tNode.parentId],
-                        templateId = tNode.id, // Mantenemos referencia al ID del nodo original del template
-                        instanceId = newInstance.id,
-                        status = NodeStatus.PENDING,
-                        createdAt = System.currentTimeMillis(),
-                        updatedAt = System.currentTimeMillis()
-                    )
-                }
-                nodeRepo.insertAll(instanceNodes)
-            }
+            instanceRepo.generateInstance(schedule.templateId, today)
         }
         
         if (activeSchedules.isEmpty()) {
-            _uiState.value = _uiState.value.copy(isLoading = false)
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 
@@ -128,7 +102,7 @@ class TodayViewModel @Inject constructor(
                 val cal = Calendar.getInstance()
                 val hour = cal.get(Calendar.HOUR_OF_DAY).toString().padStart(2, '0')
                 val min = cal.get(Calendar.MINUTE).toString().padStart(2, '0')
-                _uiState.value = _uiState.value.copy(currentTime = "$hour:$min")
+                _uiState.update { it.copy(currentTime = "$hour:$min") }
                 delay(60_000)
             }
         }

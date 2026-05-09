@@ -1,17 +1,9 @@
 package com.alan.routineos.ui.screens
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -21,52 +13,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.alan.routineos.data.local.entities.FieldType
+import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeType
-import com.alan.routineos.ui.theme.ColorBg
-import com.alan.routineos.ui.theme.ColorBorder
-import com.alan.routineos.ui.theme.ColorExec
-import com.alan.routineos.ui.theme.ColorPending
-import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.ui.theme.ColorSurface2
-import com.alan.routineos.ui.theme.ColorText
-import com.alan.routineos.ui.theme.ColorTextDim
-import com.alan.routineos.ui.theme.ColorTextMuted
-import com.alan.routineos.ui.theme.MetaMono
-import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.*
 import com.alan.routineos.ui.viewmodel.NodeTypeManagerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,9 +95,6 @@ fun NodeTypeManagerScreen(
             AddSchemaSheet(
                 onDismiss = { showAddSchemaSheet = false },
                 onAdd = { name, label, type, default, unit ->
-                    // Update ViewModel to handle new fields or just pass them
-                    // Since I haven't updated the ViewModel method signature yet, I should probably do it or use a more generic way.
-                    // Let's assume I'll update the ViewModel method.
                     viewModel.addSchemaFull(
                         uiState.selectedType!!.id,
                         name,
@@ -178,7 +132,7 @@ fun TypeList(
                         .fillMaxWidth()
                         .clickable { onSelect(type) },
                     colors = CardDefaults.cardColors(containerColor = ColorSurface),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
+                    border = BorderStroke(1.dp, ColorBorder)
                 ) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -207,10 +161,10 @@ fun TypeList(
 @Composable
 fun TypeDetail(
     nodeType: NodeType,
-    schemas: List<com.alan.routineos.data.local.entities.NodeMetadataSchema>,
+    schemas: List<NodeMetadataSchema>,
     onBack: () -> Unit,
     onAddSchema: () -> Unit,
-    onDeleteSchema: (com.alan.routineos.data.local.entities.NodeMetadataSchema) -> Unit
+    onDeleteSchema: (NodeMetadataSchema) -> Unit
 ) {
     Column(modifier = Modifier
         .fillMaxSize()

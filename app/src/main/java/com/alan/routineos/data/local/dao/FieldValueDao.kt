@@ -17,4 +17,12 @@ interface FieldValueDao {
 
     @Query("SELECT * FROM node_field_values WHERE nodeId = :nodeId AND fieldName = :fieldName ORDER BY updatedAt DESC")
     fun getHistoryForNodeAndField(nodeId: String, fieldName: String): Flow<List<NodeFieldValue>>
+
+    @Query("""
+        SELECT * FROM node_field_values 
+        WHERE fieldName = :fieldName 
+        AND nodeId IN (SELECT id FROM nodes WHERE templateId = :templateNodeId)
+        ORDER BY updatedAt ASC
+    """)
+    fun getHistoryByTemplateNode(templateNodeId: String, fieldName: String): Flow<List<NodeFieldValue>>
 }
