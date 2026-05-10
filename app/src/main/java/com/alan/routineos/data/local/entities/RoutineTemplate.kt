@@ -12,5 +12,6 @@ data class RoutineTemplate(
     val colorHex: String = "#3FB950",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
-    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC
+    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
+    val version: Int = 1
 )

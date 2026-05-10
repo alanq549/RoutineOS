@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeType
 import com.alan.routineos.data.local.entities.RoutineTemplate
+import com.alan.routineos.data.local.entities.SyncStatus
 import com.alan.routineos.data.repository.NodeRepository
 import com.alan.routineos.data.repository.NodeTypeRepository
 import com.alan.routineos.data.repository.TemplateRepository
@@ -78,8 +79,9 @@ class TemplateBuilderViewModel @Inject constructor(
             name = name,
             typeId = typeId,
             parentId = parentId,
-            templateId = _uiState.value.templateId ?: "TEMP_ID", // Will update on save
-            position = _uiState.value.nodes.filter { it.parentId == parentId }.size
+            templateId = _uiState.value.templateId ?: "TEMP_ID",
+            position = _uiState.value.nodes.filter { it.parentId == parentId }.size,
+            syncStatus = SyncStatus.PENDING_SYNC
         )
         _uiState.update { it.copy(nodes = it.nodes + newNode) }
     }
@@ -87,13 +89,17 @@ class TemplateBuilderViewModel @Inject constructor(
     fun updateNodeName(nodeId: String, newName: String) {
         _uiState.update { state ->
             state.copy(nodes = state.nodes.map { 
-                if (it.id == nodeId) it.copy(name = newName) else it 
+                if (it.id == nodeId) it.copy(
+                    name = newName, 
+                    syncStatus = SyncStatus.PENDING_SYNC,
+                    version = it.version + 1,
+                    updatedAt = System.currentTimeMillis()
+                ) else it 
             })
         }
     }
 
     fun deleteNode(nodeId: String) {
-        // Recursive delete logic
         val toDelete = mutableSetOf(nodeId)
         var added = true
         while(added) {
@@ -117,16 +123,12 @@ class TemplateBuilderViewModel @Inject constructor(
             
             val finalTemplateId = state.templateId ?: UUID.randomUUID().toString()
             
-            // 1. Find or create root node
-            // If it's a new template, we might need to designate one node as root or create a dummy root
-            // Usually, a template has one root node.
             var rootNode = state.nodes.find { it.parentId == null }
             if (rootNode == null && state.nodes.isNotEmpty()) {
-                rootNode = state.nodes.first() // Fallback
+                rootNode = state.nodes.first()
             }
             
             if (rootNode == null) {
-                // Cannot save template without nodes
                 _uiState.update { it.copy(isSaving = false) }
                 return@launch
             }
@@ -136,13 +138,16 @@ class TemplateBuilderViewModel @Inject constructor(
                 rootNodeId = rootNode.id,
                 name = state.name,
                 colorHex = state.colorHex,
-                updatedAt = System.currentTimeMillis()
+                updatedAt = System.currentTimeMillis(),
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             
             templateRepo.upsert(template)
             
-            // 2. Save all nodes with the correct templateId
-            val finalNodes = state.nodes.map { it.copy(templateId = finalTemplateId) }
+            val finalNodes = state.nodes.map { it.copy(
+                templateId = finalTemplateId,
+                syncStatus = SyncStatus.PENDING_SYNC
+            ) }
             nodeRepo.insertAll(finalNodes)
             
             _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId) }

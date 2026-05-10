@@ -7,6 +7,7 @@ import com.alan.routineos.data.local.entities.DayInstance
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeStatus
 import com.alan.routineos.data.local.entities.NodeType
+import com.alan.routineos.data.local.entities.SyncStatus
 import com.alan.routineos.data.repository.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -111,13 +112,23 @@ class TodayViewModel @Inject constructor(
     fun toggleNodeCompletion(node: Node) {
         viewModelScope.launch {
             val newStatus = if (node.status == NodeStatus.COMPLETED) NodeStatus.PENDING else NodeStatus.COMPLETED
-            nodeRepo.update(node.copy(status = newStatus, updatedAt = System.currentTimeMillis()))
+            nodeRepo.update(node.copy(
+                status = newStatus, 
+                updatedAt = System.currentTimeMillis(),
+                syncStatus = SyncStatus.PENDING_SYNC,
+                version = node.version + 1
+            ))
         }
     }
 
     fun updateNodeStatus(node: Node, status: NodeStatus) {
         viewModelScope.launch {
-            nodeRepo.update(node.copy(status = status, updatedAt = System.currentTimeMillis()))
+            nodeRepo.update(node.copy(
+                status = status, 
+                updatedAt = System.currentTimeMillis(),
+                syncStatus = SyncStatus.PENDING_SYNC,
+                version = node.version + 1
+            ))
         }
     }
 
@@ -130,7 +141,8 @@ class TodayViewModel @Inject constructor(
                 typeId = typeId,
                 parentId = parentId,
                 instanceId = instanceId,
-                status = NodeStatus.PENDING
+                status = NodeStatus.PENDING,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             nodeRepo.upsert(newNode)
         }

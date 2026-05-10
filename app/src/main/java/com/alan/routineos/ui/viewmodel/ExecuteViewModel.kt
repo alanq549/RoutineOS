@@ -16,7 +16,7 @@ data class ExecuteUiState(
     val parentNode: Node? = null,
     val nodeType: NodeType? = null,
     val schemas: List<NodeMetadataSchema> = emptyList(),
-    val draftValues: Map<String, String> = emptyMap(),
+    val fieldValues: Map<String, String> = emptyMap(),
     val history: List<HistorySession> = emptyList(),
     val isLoading: Boolean = true,
     val shouldStartTimer: Int? = null
@@ -69,7 +69,7 @@ class ExecuteViewModel @Inject constructor(
                     parentNode = parentNode,
                     nodeType = type,
                     schemas = schemas,
-                    draftValues = draft,
+                    fieldValues = draft,
                     history = history,
                     isLoading = false
                 ) }
@@ -79,7 +79,7 @@ class ExecuteViewModel @Inject constructor(
 
     fun updateDraftValue(fieldName: String, value: String) {
         _uiState.update { it.copy(
-            draftValues = it.draftValues + (fieldName to value)
+            fieldValues = it.fieldValues + (fieldName to value)
         ) }
     }
 
@@ -91,7 +91,7 @@ class ExecuteViewModel @Inject constructor(
             
             _uiState.update { it.copy(shouldStartTimer = null) }
 
-            state.draftValues.forEach { (fieldName, value) ->
+            state.fieldValues.forEach { (fieldName, value) ->
                 val schema = state.schemas.find { it.fieldName == fieldName } ?: return@forEach
                 valueRepo.upsert(
                     NodeFieldValue(
@@ -100,7 +100,8 @@ class ExecuteViewModel @Inject constructor(
                         schemaId = schema.id,
                         fieldName = fieldName,
                         value = value,
-                        updatedAt = timestamp
+                        updatedAt = timestamp,
+                        syncStatus = SyncStatus.PENDING_SYNC
                     )
                 )
             }
@@ -114,12 +115,12 @@ class ExecuteViewModel @Inject constructor(
             if (state.nodeType?.hasMetricFields == true) {
                 val durationField = state.schemas.find { it.fieldType == FieldType.DURATION }
                 if (durationField != null) {
-                    durationToStart = state.draftValues[durationField.fieldName]?.toIntOrNull()
+                    durationToStart = state.fieldValues[durationField.fieldName]?.toIntOrNull()
                 }
             }
 
             if (seriesField != null) {
-                val currentSeries = state.draftValues[seriesField.fieldName]?.toIntOrNull() ?: 0
+                val currentSeries = state.fieldValues[seriesField.fieldName]?.toIntOrNull() ?: 0
                 if (currentSeries > 1) {
                     updateDraftValue(seriesField.fieldName, (currentSeries - 1).toString())
                     _uiState.update { it.copy(shouldStartTimer = durationToStart) }
@@ -132,10 +133,15 @@ class ExecuteViewModel @Inject constructor(
         }
     }
 
-    private fun completeNode() {
+    fun completeNode() {
         viewModelScope.launch {
             val node = _uiState.value.node ?: return@launch
-            nodeRepo.update(node.copy(status = NodeStatus.COMPLETED, updatedAt = System.currentTimeMillis()))
+            nodeRepo.update(node.copy(
+                status = NodeStatus.COMPLETED, 
+                updatedAt = System.currentTimeMillis(),
+                syncStatus = SyncStatus.PENDING_SYNC,
+                version = node.version + 1
+            ))
         }
     }
 }

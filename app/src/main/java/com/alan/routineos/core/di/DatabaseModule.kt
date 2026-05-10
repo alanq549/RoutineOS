@@ -25,7 +25,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_db"
         )
-        .fallbackToDestructiveMigration() // Útil durante desarrollo inicial (fase 1)
+        .fallbackToDestructiveMigration()
         .build()
     }
 
@@ -58,4 +58,7 @@ object DatabaseModule {
 
     @Provides
     fun provideScheduleExceptionDao(db: AppDatabase): ScheduleExceptionDao = db.scheduleExceptionDao()
+
+    @Provides
+    fun provideSyncDao(db: AppDatabase): SyncDao = db.syncDao()
 }

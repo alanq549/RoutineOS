@@ -3,10 +3,7 @@ package com.alan.routineos.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.entities.DayInstance
-import com.alan.routineos.data.local.entities.Node
-import com.alan.routineos.data.local.entities.NodeStatus
-import com.alan.routineos.data.local.entities.RoutineTemplate
+import com.alan.routineos.data.local.entities.*
 import com.alan.routineos.data.repository.InstanceRepository
 import com.alan.routineos.data.repository.NodeRepository
 import com.alan.routineos.data.repository.TemplateRepository
@@ -51,8 +48,10 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             val today = DateUtils.getStartOfDay()
             val newInstance = DayInstance(
+                id = UUID.randomUUID().toString(),
                 templateId = template.id,
-                date = today
+                date = today,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             instanceRepo.upsert(newInstance)
 
@@ -68,7 +67,8 @@ class LibraryViewModel @Inject constructor(
                     instanceId = newInstance.id,
                     status = NodeStatus.PENDING,
                     createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
+                    updatedAt = System.currentTimeMillis(),
+                    syncStatus = SyncStatus.PENDING_SYNC
                 )
             }
             nodeRepo.insertAll(instanceNodes)
@@ -77,8 +77,10 @@ class LibraryViewModel @Inject constructor(
 
     fun deleteTemplate(template: RoutineTemplate) {
         viewModelScope.launch {
+            // Marcar como eliminado localmente para sincronizar el borrado si es necesario, 
+            // o simplemente borrar y confiar en el sync de la lista completa.
+            // Por simplicidad en Fase 8, borramos:
             templateRepo.delete(template)
-            // Note: Should also delete nodes associated with template or mark as deleted
         }
     }
 }

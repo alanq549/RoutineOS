@@ -13,7 +13,9 @@ data class DayInstance(
     val overrideReason: String? = null,
     val notes: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
+    val version: Int = 1
 )
 
 enum class InstanceStatus { GENERATED, IN_PROGRESS, COMPLETED, CANCELLED, OVERRIDDEN }

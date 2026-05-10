@@ -12,5 +12,7 @@ data class ScheduleException(
     val dateFrom: Long,
     val dateTo: Long,
     val affectsGeneration: Boolean = true,  // si bloquea la generación de instancias
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
+    val version: Int = 1
 )

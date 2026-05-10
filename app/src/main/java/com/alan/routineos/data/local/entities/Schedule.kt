@@ -11,8 +11,10 @@ data class Schedule(
     val weekday: Int,           // 1=Lunes ... 7=Domingo
     val isActive: Boolean = true,
     val startTime: String? = null,
-    val endTime: String? = null,    // hora de fin (útil para ciclos con salida variable)
-    val validFrom: Long? = null,    // desde cuándo aplica este schedule
-    val validUntil: Long? = null,   // hasta cuándo aplica (semestre, contrato, etc.)
-    val overrideDate: Long? = null
+    val endTime: String? = null,
+    val validFrom: Long? = null,
+    val validUntil: Long? = null,
+    val overrideDate: Long? = null,
+    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
+    val version: Int = 1
 )

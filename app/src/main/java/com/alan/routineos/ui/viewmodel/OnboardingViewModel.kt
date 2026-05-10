@@ -43,7 +43,7 @@ class OnboardingViewModel @Inject constructor(
     private val schemaRepo: MetadataSchemaRepository,
     private val templateRepo: TemplateRepository,
     private val nodeRepo: NodeRepository,
-    private val scheduleRepo: ScheduleRepository // Need to create this repo
+    private val scheduleRepo: ScheduleRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(OnboardingUiState())
@@ -95,7 +95,8 @@ class OnboardingViewModel @Inject constructor(
                     id = draft.id,
                     name = draft.name,
                     hasMetricFields = draft.hasMetrics,
-                    allowsChildren = true // Default
+                    allowsChildren = true,
+                    syncStatus = SyncStatus.PENDING_SYNC
                 )
                 nodeTypeRepo.upsert(nodeType)
                 
@@ -107,26 +108,26 @@ class OnboardingViewModel @Inject constructor(
                         fieldType = s.fieldType,
                         unit = s.unit,
                         defaultValue = s.defaultValue,
-                        position = index
+                        position = index,
+                        syncStatus = SyncStatus.PENDING_SYNC
                     ))
                 }
             }
 
-            // 2. Create Template and Root Node
-            // We need a root node for the template. In RoutineOS, a template points to a root node.
-            // Since this is the first one, let's create a generic "Root" or just use the template name.
             val firstTypeId = state.nodeTypes.firstOrNull()?.id ?: ""
             
             val rootNode = Node(
                 typeId = firstTypeId, 
                 name = state.routineName,
-                parentId = null
+                parentId = null,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             nodeRepo.upsert(rootNode)
 
             val template = RoutineTemplate(
                 rootNodeId = rootNode.id,
-                name = state.routineName
+                name = state.routineName,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             templateRepo.upsert(template)
 
@@ -135,7 +136,8 @@ class OnboardingViewModel @Inject constructor(
                 scheduleRepo.upsert(Schedule(
                     templateId = template.id,
                     weekday = day,
-                    startTime = state.startTime
+                    startTime = state.startTime,
+                    syncStatus = SyncStatus.PENDING_SYNC
                 ))
             }
 

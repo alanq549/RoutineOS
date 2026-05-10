@@ -14,7 +14,10 @@ data class NodeOverride(
     val newDurationMinutes: Int? = null,
     val postponeMinutes: Int? = null,
     val reason: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
+    val version: Int = 1
 )
 
 enum class OverrideType { POSTPONE, SKIP, RESCHEDULE, DURATION_CHANGE, CANCEL }

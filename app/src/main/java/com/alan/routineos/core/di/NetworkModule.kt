@@ -4,6 +4,7 @@ import com.alan.routineos.core.network.ApiConfig
 import com.alan.routineos.core.network.AuthInterceptor
 import com.alan.routineos.core.session.SessionManager
 import com.alan.routineos.data.remote.auth.AuthApi
+import com.alan.routineos.data.remote.sync.SyncApi
 import com.alan.routineos.data.remote.user.UserApi
 import dagger.Lazy
 import dagger.Module
@@ -58,5 +59,11 @@ object NetworkModule {
     @Singleton
     fun provideUserApi(retrofit: Retrofit): UserApi {
         return retrofit.create(UserApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSyncApi(retrofit: Retrofit): SyncApi {
+        return retrofit.create(SyncApi::class.java)
     }
 }

@@ -20,7 +20,7 @@ import com.alan.routineos.data.local.entities.*
         NodeOverride::class,
         ScheduleException::class
     ],
-    version = 2, // Incrementamos versión por cambios estructurales masivos
+    version = 3, // Incrementamos versión por campos de sincronización
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -35,4 +35,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun scheduleDao(): ScheduleDao
     abstract fun nodeOverrideDao(): NodeOverrideDao
     abstract fun scheduleExceptionDao(): ScheduleExceptionDao
+    abstract fun syncDao(): SyncDao
 }

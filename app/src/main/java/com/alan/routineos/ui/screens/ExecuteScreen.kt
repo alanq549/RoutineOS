@@ -1,14 +1,47 @@
 package com.alan.routineos.ui.screens
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -20,9 +53,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.alan.routineos.data.local.entities.FieldType
-import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorSurface2
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.ColorTextMuted
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.MonoTimer
+import com.alan.routineos.ui.theme.TitleNode
 import com.alan.routineos.ui.viewmodel.ExecuteViewModel
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -35,7 +77,7 @@ fun ExecuteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val haptic = LocalHapticFeedback.current
-    
+
     var timerRunning by remember { mutableStateOf(false) }
     var timeLeftSeconds by remember { mutableIntStateOf(0) }
 
@@ -62,12 +104,12 @@ fun ExecuteScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
-                        text = uiState.parentNode?.name ?: "Actividad", 
+                        text = uiState.parentNode?.name ?: "Actividad",
                         style = TitleNode,
                         color = ColorTextDim
-                    ) 
+                    )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
@@ -87,7 +129,9 @@ fun ExecuteScreen(
                 CircularProgressIndicator(color = ColorExec)
             }
         } else {
-            Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -95,7 +139,7 @@ fun ExecuteScreen(
                         .verticalScroll(rememberScrollState())
                 ) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = uiState.node?.name ?: "",
                         style = MaterialTheme.typography.titleLarge.copy(
@@ -105,22 +149,27 @@ fun ExecuteScreen(
                         ),
                         color = ColorText
                     )
-                    
+
                     if (timerRunning) {
                         Text(
-                            text = String.format(Locale.getDefault(), "%02d:%02d", timeLeftSeconds / 60, timeLeftSeconds % 60),
+                            text = String.format(
+                                Locale.getDefault(),
+                                "%02d:%02d",
+                                timeLeftSeconds / 60,
+                                timeLeftSeconds % 60
+                            ),
                             style = MonoTimer,
                             color = ColorExec,
                             modifier = Modifier.padding(vertical = 16.dp)
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(32.dp))
 
                     uiState.schemas.forEach { schema ->
                         DynamicField(
                             schema = schema,
-                            currentValue = uiState.draftValues[schema.fieldName] ?: "",
+                            currentValue = uiState.fieldValues[schema.fieldName] ?: "",
                             onValueChange = { newValue ->
                                 viewModel.updateDraftValue(schema.fieldName, newValue)
                             }
@@ -139,7 +188,7 @@ fun ExecuteScreen(
 
                     Spacer(modifier = Modifier.height(120.dp))
                 }
-                
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -160,12 +209,17 @@ fun ExecuteScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        val seriesField = uiState.schemas.find { it.fieldName.lowercase().contains("ser") }
-                        val isLast = (uiState.draftValues[seriesField?.fieldName]?.toIntOrNull() ?: 1) <= 1
-                        
+                        val seriesField =
+                            uiState.schemas.find { it.fieldName.lowercase().contains("ser") }
+                        val isLast =
+                            (uiState.fieldValues[seriesField?.fieldName]?.toIntOrNull() ?: 1) <= 1
+
                         Text(
-                            if (seriesField != null && !isLast) "GUARDAR SET" else "GUARDAR Y FINALIZAR", 
-                            style = TitleNode.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                            if (seriesField != null && !isLast) "GUARDAR SET" else "GUARDAR Y FINALIZAR",
+                            style = TitleNode.copy(
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
                         )
                     }
                 }
@@ -187,7 +241,7 @@ fun DynamicField(
             color = ColorTextDim
         )
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         when (schema.fieldType) {
             FieldType.NUMBER -> {
                 NumericPicker(
@@ -197,6 +251,7 @@ fun DynamicField(
                     onValueChange = onValueChange
                 )
             }
+
             FieldType.DURATION -> {
                 NumericPicker(
                     value = currentValue,
@@ -205,9 +260,14 @@ fun DynamicField(
                     onValueChange = onValueChange
                 )
             }
+
             FieldType.BOOLEAN -> {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (currentValue.toBoolean()) "SÍ" else "NO", style = TitleNode, color = ColorText)
+                    Text(
+                        if (currentValue.toBoolean()) "SÍ" else "NO",
+                        style = TitleNode,
+                        color = ColorText
+                    )
                     Spacer(modifier = Modifier.width(16.dp))
                     Switch(
                         checked = currentValue.toBoolean(),
@@ -216,6 +276,7 @@ fun DynamicField(
                     )
                 }
             }
+
             else -> {
                 OutlinedTextField(
                     value = currentValue,
@@ -242,7 +303,7 @@ fun NumericPicker(
     onValueChange: (String) -> Unit
 ) {
     val numericValue = value.toFloatOrNull() ?: 0f
-    
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         Surface(
             onClick = { onValueChange((numericValue - stepSize).toString()) },
@@ -255,7 +316,7 @@ fun NumericPicker(
                 Text("-", color = ColorText, fontSize = 24.sp)
             }
         }
-        
+
         Column(
             modifier = Modifier.padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -269,7 +330,7 @@ fun NumericPicker(
                 Text(text = unit, style = MetaMono, color = ColorTextDim)
             }
         }
-        
+
         Surface(
             onClick = { onValueChange((numericValue + stepSize).toString()) },
             modifier = Modifier.size(48.dp),
@@ -287,7 +348,9 @@ fun NumericPicker(
 @Composable
 fun SessionHistoryCard(session: com.alan.routineos.ui.viewmodel.HistorySession) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = ColorSurface2)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {

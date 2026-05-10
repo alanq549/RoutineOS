@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeType
+import com.alan.routineos.data.local.entities.SyncStatus
 import com.alan.routineos.data.repository.MetadataSchemaRepository
 import com.alan.routineos.data.repository.NodeTypeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -56,9 +57,11 @@ class NodeTypeManagerViewModel @Inject constructor(
     fun createNodeType(name: String, hasMetrics: Boolean) {
         viewModelScope.launch {
             val newType = NodeType(
+                id = UUID.randomUUID().toString(),
                 name = name,
                 hasMetricFields = hasMetrics,
-                position = _uiState.value.nodeTypes.size
+                position = _uiState.value.nodeTypes.size,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             nodeTypeRepo.upsert(newType)
         }
@@ -66,6 +69,7 @@ class NodeTypeManagerViewModel @Inject constructor(
 
     fun deleteNodeType(type: NodeType) {
         viewModelScope.launch {
+            // In a real sync system, we might mark as deleted instead of removing
             nodeTypeRepo.delete(type)
         }
     }
@@ -73,13 +77,15 @@ class NodeTypeManagerViewModel @Inject constructor(
     fun addSchemaFull(typeId: String, name: String, label: String, fieldType: FieldType, defaultValue: String?, unit: String?) {
         viewModelScope.launch {
             val newSchema = NodeMetadataSchema(
+                id = UUID.randomUUID().toString(),
                 typeId = typeId,
                 fieldName = name,
                 fieldLabel = label,
                 fieldType = fieldType,
                 defaultValue = defaultValue,
                 unit = unit,
-                position = _uiState.value.schemasForSelectedType.size
+                position = _uiState.value.schemasForSelectedType.size,
+                syncStatus = SyncStatus.PENDING_SYNC
             )
             schemaRepo.upsert(newSchema)
         }
