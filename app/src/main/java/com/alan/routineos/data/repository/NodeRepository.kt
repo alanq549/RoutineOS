@@ -17,6 +17,8 @@ class NodeRepository @Inject constructor(
     suspend fun getAllByTemplate(templateId: String): List<Node> = nodeDao.getAllByTemplate(templateId)
     
     suspend fun getById(id: String): Node? = nodeDao.getById(id)
+
+    fun getAllTemplateNodes(): Flow<List<Node>> = nodeDao.getAllTemplateNodes()
     
     suspend fun upsert(node: Node) = nodeDao.upsert(node)
 
