@@ -1,315 +1,258 @@
 package com.alan.routineos.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.EventBusy
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.toColorInt
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.entities.RoutineTemplate
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorPending
+import com.alan.routineos.ui.theme.ColorPlan
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.HabitGreen
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.TitleNode
 import com.alan.routineos.ui.viewmodel.PlannerViewModel
-import com.alan.routineos.ui.viewmodel.ScheduleWithTemplate
-import java.text.SimpleDateFormat
-import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlannerScreen(
     viewModel: PlannerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var showAddScheduleSheet by remember { mutableStateOf(false) }
-    var showAddExceptionSheet by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            Column(modifier = Modifier.background(ColorSurface).statusBarsPadding()) {
-                CenterAlignedTopAppBar(
-                    title = { Text("PLANIFICADOR", style = MetaMono) },
-                    actions = {
-                        IconButton(onClick = { showAddExceptionSheet = true }) {
-                            Icon(Icons.Default.EventBusy, contentDescription = "Excepciones", tint = ColorPending)
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = ColorSurface)
-                )
-                WeekStrip(
-                    days = uiState.weekDays,
-                    selectedDate = uiState.selectedDate,
-                    onDateSelect = viewModel::selectDate
-                )
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { showAddScheduleSheet = true },
-                containerColor = ColorExec,
-                contentColor = Color.White
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Schedule")
-            }
-        },
         containerColor = ColorBg
     ) { paddingValues ->
-        Column(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
-            DayDetailSection(
-                selectedDate = uiState.selectedDate,
-                schedules = uiState.activeSchedules,
-                instance = uiState.instanceForSelectedDate
-            )
-        }
-
-        if (showAddScheduleSheet) {
-            AddScheduleSheet(
-                templates = uiState.templates,
-                onDismiss = { showAddScheduleSheet = false },
-                onConfirm = { templateId, startTime ->
-                    val weekday = DateUtils.getDayOfWeek(Date(uiState.selectedDate))
-                    viewModel.addSchedule(templateId, weekday, startTime)
-                    showAddScheduleSheet = false
-                }
-            )
-        }
-
-        if (showAddExceptionSheet) {
-            AddExceptionSheet(
-                onDismiss = { showAddExceptionSheet = false },
-                onConfirm = { label, from, to ->
-                    viewModel.addException(label, from, to)
-                    showAddExceptionSheet = false
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun WeekStrip(
-    days: List<Long>,
-    selectedDate: Long,
-    onDateSelect: (Long) -> Unit
-) {
-    val dayFormat = SimpleDateFormat("E", Locale.getDefault())
-    val dateFormat = SimpleDateFormat("d", Locale.getDefault())
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 16.dp, horizontal = 8.dp),
-        horizontalArrangement = Arrangement.SpaceAround
-    ) {
-        days.forEach { date ->
-            val isSelected = date == selectedDate
-            val dayName = dayFormat.format(Date(date)).take(1).uppercase()
-            val dayNum = dateFormat.format(Date(date))
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .clickable { onDateSelect(date) }
-                    .background(
-                        if (isSelected) ColorExec.copy(alpha = 0.1f) else Color.Transparent,
-                        RoundedCornerShape(8.dp)
-                    )
-                    .padding(8.dp)
-            ) {
-                Text(dayName, style = MetaMono, color = if (isSelected) ColorExec else ColorTextDim)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    dayNum, 
-                    style = TitleNode, 
-                    color = if (isSelected) ColorExec else ColorText,
-                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun DayDetailSection(
-    selectedDate: Long,
-    schedules: List<ScheduleWithTemplate>,
-    instance: com.alan.routineos.data.local.entities.DayInstance?
-) {
-    val fullDateFormat = SimpleDateFormat("EEEE, d 'de' MMMM", Locale.getDefault())
-    
-    Column(modifier = Modifier.padding(16.dp)) {
-        Text(
-            text = fullDateFormat.format(Date(selectedDate)).uppercase(),
-            style = MetaMono,
-            color = ColorTextDim
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (schedules.isEmpty()) {
-            Box(modifier = Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                Text("Sin rutinas programadas", color = ColorTextMuted, style = TitleNode)
-            }
-        } else {
-            schedules.forEach { item ->
-                ScheduleCard(item)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
-        }
-
-        if (instance != null) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Surface(
-                color = ColorExec.copy(alpha = 0.1f),
-                shape = RoundedCornerShape(4.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ColorExec.copy(alpha = 0.3f))
-            ) {
-                Text(
-                    "INSTANCIA GENERADA", 
-                    style = MetaMono, 
-                    color = ColorExec, 
-                    modifier = Modifier.padding(vertical = 4.dp, horizontal = 8.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ScheduleCard(item: ScheduleWithTemplate) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = ColorSurface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+                .padding(horizontal = 16.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(item.template?.name ?: "Sin nombre", style = TitleNode, color = ColorText)
-                Text(item.schedule.startTime ?: "--:--", style = MonoTimer.copy(fontSize = 18.sp), color = ColorTextDim)
-            }
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .background(
-                        color = try { Color(item.template?.colorHex?.toColorInt() ?: 0xFF3FB950.toInt()) } 
-                                catch (e: Exception) { ColorExec }, 
-                        shape = CircleShape
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column {
+                    Text(
+                        text = "PLANNER",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = ColorText,
+                        fontWeight = FontWeight.Bold
                     )
-            )
-        }
-    }
-}
+                    Text(
+                        text = "Mayo 2025",
+                        style = TitleNode,
+                        color = ColorTextDim
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Default.Add, // Placeholder icon
+                    contentDescription = null,
+                    tint = ColorTextDim,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AddScheduleSheet(
-    templates: List<RoutineTemplate>,
-    onDismiss: () -> Unit,
-    onConfirm: (String, String) -> Unit
-) {
-    var selectedTemplateId by remember { mutableStateOf(templates.firstOrNull()?.id ?: "") }
-    var startTime by remember { mutableStateOf("08:00") }
+            Spacer(modifier = Modifier.height(24.dp))
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ColorSurface) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 32.dp)) {
-            Text("PROGRAMAR RUTINA", style = MetaMono, color = ColorText)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            Text("SELECCIONAR PLANTILLA", style = MetaMono, color = ColorTextDim)
-            LazyColumn(modifier = Modifier.height(150.dp)) {
-                items(templates) { template ->
-                    Row(
+            // Week Strip
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val weekDays = listOf(
+                    "L" to "12", "MA" to "13", "MI" to "14",
+                    "J" to "15", "V" to "16", "S" to "17", "D" to "18"
+                )
+
+                weekDays.forEach { (day, num) ->
+                    val isSelected = day == "MA"
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedTemplateId = template.id }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .width(40.dp)
+                            .then(
+                                if (isSelected) Modifier
+                                    .background(ColorPlan, RoundedCornerShape(12.dp))
+                                    .padding(vertical = 8.dp)
+                                else Modifier.padding(vertical = 8.dp)
+                            )
                     ) {
-                        RadioButton(
-                            selected = selectedTemplateId == template.id,
-                            onClick = { selectedTemplateId = template.id },
-                            colors = RadioButtonDefaults.colors(selectedColor = ColorExec)
+                        Text(
+                            day,
+                            style = MetaMono.copy(fontSize = 12.sp),
+                            color = if (isSelected) Color.White else ColorTextDim
                         )
-                        Text(template.name, color = ColorText, style = TitleNode)
+                        Text(
+                            num,
+                            style = TitleNode.copy(fontSize = 18.sp),
+                            color = if (isSelected) Color.White else ColorText
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 4.dp)
+                                .size(4.dp)
+                                .background(if (isSelected) Color.White else ColorPlan, CircleShape)
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("HORA DE INICIO", style = MetaMono, color = ColorTextDim)
-            OutlinedTextField(
-                value = startTime,
-                onValueChange = { startTime = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("08:00") },
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ColorExec)
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = "MARTES 13 MAYO · 4 ACTIVIDADES",
+                style = MetaMono,
+                color = ColorTextDim
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = { onConfirm(selectedTemplateId, startTime) },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
-                enabled = selectedTemplateId.isNotBlank()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("CONFIRMAR")
+                item {
+                    PlannerActivityCard(
+                        time = "5:30 am",
+                        title = "Despertar",
+                        color = HabitGreen,
+                        tags = listOf("fijo L-V")
+                    )
+                }
+                item {
+                    PlannerActivityCard(
+                        time = "7:00 am - 2:00 pm",
+                        title = "Semestre 8",
+                        color = ColorPlan,
+                        tags = listOf("Desarrollo Móvil 7-9", "Análisis Emp. 9-11", "+ 2 bloques"),
+                        tagColors = listOf(HabitGreen, HabitGreen, ColorPending)
+                    )
+                }
+                item {
+                    PlannerActivityCard(
+                        time = "4:00 pm - 5:30 pm",
+                        title = "Pull Day",
+                        color = Color(0xFFBC3FA3), // Purple
+                        tags = listOf("Ma / V")
+                    )
+                }
+                item {
+                    PlannerActivityCard(
+                        time = "10:30 pm",
+                        title = "Dormir",
+                        color = ColorPending,
+                        tags = listOf("todos los días")
+                    )
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    OutlinedButton(
+                        onClick = { /* TODO */ },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ColorText)
+                    ) {
+                        Text(" agregar actividad a este día", style = TitleNode)
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddExceptionSheet(
-    onDismiss: () -> Unit,
-    onConfirm: (String, Long, Long) -> Unit
+fun PlannerActivityCard(
+    time: String,
+    title: String,
+    color: Color,
+    tags: List<String>,
+    tagColors: List<Color>? = null
 ) {
-    var label by remember { mutableStateOf("") }
-    val today = DateUtils.getStartOfDay()
-
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ColorSurface) {
-        Column(modifier = Modifier.padding(16.dp).padding(bottom = 32.dp)) {
-            Text("NUEVA EXCEPCIÓN", style = MetaMono, color = ColorText)
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            OutlinedTextField(
-                value = label,
-                onValueChange = { label = it },
-                label = { Text("Ej: Vacaciones, Exámenes") },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = ColorExec)
+    Surface(
+        color = ColorSurface,
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+        border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .fillMaxHeight()
+                    .background(color)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Text("Se aplicará desde hoy por 7 días (Simplificado)", color = ColorTextDim, style = TitleNode)
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(time, style = MetaMono, color = ColorTextDim)
+                Text(title, style = TitleNode.copy(fontSize = 18.sp), color = ColorText)
 
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = { 
-                    val to = today + (7 * 24 * 60 * 60 * 1000L)
-                    onConfirm(label, today, to) 
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = ColorPending),
-                enabled = label.isNotBlank()
-            ) {
-                Text("BLOQUEAR GENERACIÓN")
+                if (tags.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        tags.forEachIndexed { index, tag ->
+                            val currentTagColor = tagColors?.getOrNull(index) ?: color
+                            Surface(
+                                color = currentTagColor.copy(alpha = 0.1f),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = tag,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    style = MetaMono.copy(fontSize = 10.sp),
+                                    color = currentTagColor
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

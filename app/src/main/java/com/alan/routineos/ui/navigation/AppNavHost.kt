@@ -111,7 +111,10 @@ fun AppNavHost(
                 ) 
             }
             composable(Screen.TemplateBuilder.route) {
-                TemplateBuilderScreen(onBack = { navController.popBackStack() })
+                TemplateBuilderScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToTypeManager = { navController.navigate(Screen.NodeTypeManager.route) }
+                )
             }
             composable(Screen.NodeTypeManager.route) {
                 NodeTypeManagerScreen(onBack = { navController.popBackStack() })
