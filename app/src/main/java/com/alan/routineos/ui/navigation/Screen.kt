@@ -1,6 +1,7 @@
 package com.alan.routineos.ui.navigation
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LibraryBooks
@@ -16,6 +17,7 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector?
     }
     object Library : Screen("library", "Library", Icons.Default.LibraryBooks)
     object Stats : Screen("stats", "Stats", Icons.Default.History)
+    object Account : Screen("account", "Account", Icons.Default.AccountCircle)
     
     // Screens without bottom nav
     object TemplateBuilder : Screen("library/builder/{templateId}", "Editor") {
@@ -30,5 +32,6 @@ val bottomNavItems = listOf(
     Screen.Today,
     Screen.Planner,
     Screen.Library,
-    Screen.Stats
+    Screen.Stats,
+    Screen.Account
 )

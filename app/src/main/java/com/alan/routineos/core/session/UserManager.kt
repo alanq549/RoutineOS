@@ -2,61 +2,67 @@ package com.alan.routineos.core.session
 
 import com.alan.routineos.data.repository.UserRepository
 import com.alan.routineos.domain.model.UserProfile
-import com.alan.routineos.ui.state.UserState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import retrofit2.HttpException
-import java.io.IOException
+import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
 
 class UserManager @Inject constructor(
     private val repository: UserRepository,
 ) {
 
-    private val _state = MutableStateFlow<UserState>(UserState.Idle)
-    val state: StateFlow<UserState> = _state
+    private val _user = MutableStateFlow<UserProfile?>(null)
+    val user: StateFlow<UserProfile?> = _user.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
 
     suspend fun loadLocal() {
-        _state.value = UserState.Loading
-
+        _isLoading.value = true
+        _error.value = null
         val cached = repository.getLocalUser()
-
-        _state.value = cached?.let {
-            UserState.Success(it)
-        } ?: UserState.Idle
+        _user.value = cached
+        _isLoading.value = false
     }
 
     suspend fun fetchUser() {
-        _state.value = UserState.Loading
-
+        _isLoading.value = true
+        _error.value = null
         try {
             val user = repository.fetchAndCacheUser()
-
-
-            _state.value = UserState.Success(user)
-
+            _user.value = user
         } catch (e: Exception) {
-
-            _state.value = UserState.Error("Unexpected error")
+            _error.value = e.message ?: "Unexpected error"
+        } finally {
+            _isLoading.value = false
         }
     }
 
     suspend fun syncUser() {
+        _isLoading.value = true
+        _error.value = null
         try {
             val user = repository.fetchAndCacheUser()
-            _state.value = UserState.Success(user)
+            _user.value = user
         } catch (e: Exception) {
-            // fallback seguro
             val cached = repository.getLocalUser()
-            _state.value = cached?.let {
-                UserState.Success(it)
-            } ?: UserState.Error("No user available")
+            if (cached != null) {
+                _user.value = cached
+            } else {
+                _error.value = e.message ?: "No user available"
+            }
+        } finally {
+            _isLoading.value = false
         }
     }
 
-
     suspend fun clear() {
         repository.clear()
-        _state.value = UserState.Idle
+        _user.value = null
+        _error.value = null
+        _isLoading.value = false
     }
 }
