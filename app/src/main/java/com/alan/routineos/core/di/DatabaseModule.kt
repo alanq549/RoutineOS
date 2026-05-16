@@ -61,4 +61,7 @@ object DatabaseModule {
 
     @Provides
     fun provideSyncDao(db: AppDatabase): SyncDao = db.syncDao()
+
+    @Provides
+    fun provideNodeScheduleDao(db: AppDatabase): NodeScheduleDao = db.nodeScheduleDao()
 }

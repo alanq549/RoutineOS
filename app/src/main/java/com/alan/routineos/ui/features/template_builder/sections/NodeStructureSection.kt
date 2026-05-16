@@ -7,14 +7,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.ui.features.template_builder.components.AddDashedButton
 import com.alan.routineos.ui.features.template_builder.components.NodeItem
 import com.alan.routineos.ui.features.template_builder.components.SectionHeader
 
 fun LazyListScope.nodeStructureSection(
     nodes: List<Node>,
+    nodeSchedules: Map<String, List<NodeSchedule>>,
     onAddNode: (parentId: String?) -> Unit,
-    onDeleteNode: (nodeId: String) -> Unit
+    onDeleteNode: (nodeId: String) -> Unit,
+    onScheduleClick: (Node) -> Unit
 ) {
     item {
         SectionHeader(title = "Estructura de nodos", onAdd = { onAddNode(null) })
@@ -34,9 +37,11 @@ fun LazyListScope.nodeStructureSection(
             NodeHierarchy(
                 node = node,
                 allNodes = nodes,
+                nodeSchedules = nodeSchedules,
                 depth = 0,
                 onAddChild = onAddNode,
-                onDeleteNode = onDeleteNode
+                onDeleteNode = onDeleteNode,
+                onScheduleClick = onScheduleClick
             )
         }
     }
@@ -52,19 +57,25 @@ fun LazyListScope.nodeStructureSection(
 private fun NodeHierarchy(
     node: Node,
     allNodes: List<Node>,
+    nodeSchedules: Map<String, List<NodeSchedule>>,
     depth: Int,
     onAddChild: (String) -> Unit,
-    onDeleteNode: (String) -> Unit
+    onDeleteNode: (String) -> Unit,
+    onScheduleClick: (Node) -> Unit
 ) {
     val children = allNodes.filter { it.parentId == node.id }
+    val schedules = nodeSchedules[node.id] ?: emptyList()
+    
     NodeItem(
         name = node.name,
         depth = depth,
         hasChildren = children.isNotEmpty(),
+        hasSchedules = schedules.isNotEmpty(),
         onAddClick = { onAddChild(node.id) },
-        onDeleteClick = { onDeleteNode(node.id) }
+        onDeleteClick = { onDeleteNode(node.id) },
+        onScheduleClick = { onScheduleClick(node) }
     )
     children.forEach { child ->
-        NodeHierarchy(child, allNodes, depth + 1, onAddChild, onDeleteNode)
+        NodeHierarchy(child, allNodes, nodeSchedules, depth + 1, onAddChild, onDeleteNode, onScheduleClick)
     }
 }

@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.RoutineOS" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="Theme.RoutineOS.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0D1117</item>
+        <item name="postSplashScreenTheme">@style/Theme.RoutineOS</item>
+    </style>
 </resources>

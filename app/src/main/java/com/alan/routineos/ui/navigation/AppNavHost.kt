@@ -15,58 +15,55 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.alan.routineos.core.datastore.SettingsDataStore
+import androidx.navigation.navOptions
+import com.alan.routineos.ui.core.startup.AppStartupState
+import com.alan.routineos.ui.core.startup.AppStartupViewModel
+import com.alan.routineos.ui.core.startup.navigation.LAUNCH_ROUTE
+import com.alan.routineos.ui.core.startup.navigation.launchScreen
 import com.alan.routineos.ui.features.account.navigation.accountScreen
 import com.alan.routineos.ui.features.auth.navigation.authScreen
-import com.alan.routineos.ui.features.auth.viewmodel.AuthViewModel
+import com.alan.routineos.ui.features.auth.navigation.navigateToAuth
 import com.alan.routineos.ui.features.execute.navigation.executeScreen
+import com.alan.routineos.ui.features.execute.navigation.navigateToExecute
 import com.alan.routineos.ui.features.library.navigation.libraryScreen
+import com.alan.routineos.ui.features.node_type_manager.navigation.navigateToNodeTypeManager
 import com.alan.routineos.ui.features.node_type_manager.navigation.nodeTypeManagerScreen
+import com.alan.routineos.ui.features.onboarding.navigation.navigateToOnboarding
 import com.alan.routineos.ui.features.onboarding.navigation.onboardingScreen
 import com.alan.routineos.ui.features.planner.navigation.plannerScreen
 import com.alan.routineos.ui.features.stats.navigation.statsScreen
+import com.alan.routineos.ui.features.template_builder.navigation.navigateToTemplateBuilder
 import com.alan.routineos.ui.features.template_builder.navigation.templateBuilderScreen
+import com.alan.routineos.ui.features.today.navigation.navigateToToday
 import com.alan.routineos.ui.features.today.navigation.todayScreen
 import com.alan.routineos.ui.theme.ColorSurface
-import dagger.hilt.android.lifecycle.HiltViewModel
-import javax.inject.Inject
-
-@HiltViewModel
-class NavViewModel @Inject constructor(
-    val settingsDataStore: SettingsDataStore
-) : ViewModel()
 
 @Composable
 fun AppNavHost(
     navController: NavHostController = rememberNavController(),
-    navViewModel: NavViewModel = hiltViewModel()
+    startupViewModel: AppStartupViewModel = hiltViewModel()
 ) {
-    val isOnboardingCompleted by navViewModel.settingsDataStore.isOnboardingCompleted.collectAsState(
-        initial = null
-    )
+    val startupState by startupViewModel.state.collectAsState()
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-
-    if (isOnboardingCompleted == null) return
-
-    val startDestination = if (isOnboardingCompleted == true) Screen.Today.route else "onboarding"
-
     val currentRoute = currentDestination?.route
-    val showBottomBar = bottomNavItems.any { it.route == currentRoute } &&
-            currentRoute != Screen.Execute.route &&
-            currentRoute != "onboarding" &&
-            currentRoute != Screen.Auth.route
 
-    val authViewModel: AuthViewModel = hiltViewModel()
+    // Use metadata from Screen object to decide UI state
+    val currentScreen = Screen.fromRoute(currentRoute)
+    val showBottomBar = currentScreen?.showBottomBar == true
+
+    // Si todavía estamos cargando el estado inicial (DataStore), 
+    // el Splash nativo se mantiene visible (configurado en MainActivity)
+    if (startupState is AppStartupState.Loading) {
+        return
+    }
 
     Scaffold(
         bottomBar = {
@@ -106,23 +103,51 @@ fun AppNavHost(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = startDestination,
+            startDestination = LAUNCH_ROUTE,
             modifier = Modifier.padding(innerPadding)
         ) {
-            onboardingScreen(
-                onFinish = {
-                    navController.navigate(Screen.Today.route) {
-                        popUpTo("onboarding") { inclusive = true }
+            // 1. Splash Animado (LaunchScreen) - Orchestration
+            launchScreen(
+                state = startupState,
+                onFinish = { finalState ->
+                    val navOptions = navOptions {
+                        popUpTo(LAUNCH_ROUTE) { inclusive = true }
+                    }
+                    when (finalState) {
+                        AppStartupState.ShowHome -> navController.navigateToToday(navOptions)
+                        AppStartupState.ShowOnboarding -> navController.navigateToOnboarding(
+                            navOptions
+                        )
+
+                        else -> navController.navigateToToday(navOptions)
                     }
                 }
             )
-            
-            todayScreen(
-                onNavigateToExecute = { nodeId ->
-                    navController.navigate(Screen.Execute.createRoute(nodeId))
+
+            // 2. Initial Flow Orchestration
+            onboardingScreen(
+                onFinish = {
+                    navController.navigateToToday(navOptions {
+                        popUpTo("onboarding") { inclusive = true }
+                    })
                 }
             )
-            
+
+            authScreen(
+                onLoginSuccess = {
+                    navController.navigateToToday(navOptions {
+                        popUpTo(Screen.Auth.route) { inclusive = true }
+                    })
+                }
+            )
+
+            // 3. Feature Orchestration
+            todayScreen(
+                onNavigateToExecute = { nodeId ->
+                    navController.navigateToExecute(nodeId)
+                }
+            )
+
             plannerScreen()
 
             executeScreen(
@@ -131,16 +156,18 @@ fun AppNavHost(
 
             libraryScreen(
                 onNavigateToBuilder = { templateId ->
-                    navController.navigate(Screen.TemplateBuilder.createRoute(templateId))
+                    navController.navigateToTemplateBuilder(templateId)
                 },
                 onNavigateToTypes = {
-                    navController.navigate(Screen.NodeTypeManager.route)
+                    navController.navigateToNodeTypeManager()
                 }
             )
 
             templateBuilderScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToTypeManager = { navController.navigate(Screen.NodeTypeManager.route) }
+                onNavigateToTypeManager = {
+                    navController.navigateToNodeTypeManager()
+                }
             )
 
             nodeTypeManagerScreen(
@@ -151,15 +178,11 @@ fun AppNavHost(
 
             accountScreen(
                 onBack = { navController.popBackStack() },
-                onLogout = { 
-                    authViewModel.logout()
+                onLogout = {
+                    // Logout orchestration logic
                 },
-                onNavigateToAuth = { navController.navigate(Screen.Auth.route) }
-            )
-
-            authScreen(
-                onLoginSuccess = {
-                    navController.popBackStack()
+                onNavigateToAuth = {
+                    navController.navigateToAuth()
                 }
             )
         }

@@ -1,7 +1,9 @@
 package com.alan.routineos.data.repository
 
+import com.alan.routineos.core.util.DateUtils
 import com.alan.routineos.data.local.dao.DayInstanceDao
 import com.alan.routineos.data.local.dao.NodeDao
+import com.alan.routineos.data.local.dao.NodeScheduleDao
 import com.alan.routineos.data.local.dao.ScheduleDao
 import com.alan.routineos.data.local.dao.ScheduleExceptionDao
 import com.alan.routineos.data.local.entities.DayInstance
@@ -10,6 +12,7 @@ import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +22,8 @@ class InstanceRepository @Inject constructor(
     private val dayInstanceDao: DayInstanceDao,
     private val nodeDao: NodeDao,
     private val scheduleDao: ScheduleDao,
-    private val exceptionDao: ScheduleExceptionDao
+    private val exceptionDao: ScheduleExceptionDao,
+    private val nodeScheduleDao: NodeScheduleDao
 ) {
     fun getByDate(date: Long): Flow<DayInstance?> = dayInstanceDao.getByDate(date)
     
@@ -45,6 +49,7 @@ class InstanceRepository @Inject constructor(
     }
 
     suspend fun generateInstance(templateId: String, date: Long): DayInstance {
+        val weekday = DateUtils.getDayOfWeek(Date(date)) 
         val instanceId = UUID.randomUUID().toString()
         val newInstance = DayInstance(
             id = instanceId,
@@ -55,21 +60,37 @@ class InstanceRepository @Inject constructor(
         dayInstanceDao.upsert(newInstance)
 
         val templateNodes = nodeDao.getAllByTemplate(templateId)
-        val idMap = mutableMapOf<String, String>()
-        
-        templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
+        val nodeIds = templateNodes.map { it.id }
+        val allSchedules = nodeScheduleDao.getSchedulesForNodes(nodeIds)
 
-        val instanceNodes = templateNodes.map { tNode ->
+        // FILTRO: Solo incluimos nodos secuenciales o que tengan horario para hoy
+        val filteredNodes = templateNodes.filter { tNode ->
+            val schedulesForNode = allSchedules.filter { it.nodeId == tNode.id }
+            if (schedulesForNode.isEmpty()) {
+                true // Nodo secuencial (Gym)
+            } else {
+                schedulesForNode.any { it.dayOfWeek == weekday } // Solo si aplica hoy
+            }
+        }
+
+        val idMap = mutableMapOf<String, String>()
+        filteredNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
+
+        val instanceNodes = filteredNodes.map { tNode ->
+            val todaySchedule = allSchedules.find { it.nodeId == tNode.id && it.dayOfWeek == weekday }
+            
             tNode.copy(
                 id = idMap[tNode.id]!!,
                 parentId = idMap[tNode.parentId],
                 templateId = tNode.id,
                 instanceId = instanceId,
                 status = NodeStatus.PENDING,
+                scheduledTime = todaySchedule?.startTime ?: tNode.scheduledTime, // Aplicar horario específico si existe
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis()
             )
-        }
+        }.sortedBy { it.scheduledTime ?: "99:99" } // Ordenación natural por tiempo
+
         nodeDao.insertAll(instanceNodes)
         
         return newInstance
@@ -96,11 +117,9 @@ class InstanceRepository @Inject constructor(
                     streak++
                     expectedDate -= oneDayMs
                 } else if (instance.date < expectedDate) {
-                    // Missed a day in the past, streak ends
                     break
                 }
             } else {
-                // If it's today and not completed yet, streak might still continue from yesterday
                 if (instance.date != com.alan.routineos.core.util.DateUtils.getStartOfDay()) {
                     break
                 }

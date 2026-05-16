@@ -73,6 +73,9 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
 
+    // Splash Screen
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     // Hilt
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

@@ -24,8 +24,10 @@ fun NodeItem(
     depth: Int,
     hasChildren: Boolean = false,
     meta: String? = null,
+    hasSchedules: Boolean = false,
     onAddClick: () -> Unit = {},
-    onDeleteClick: () -> Unit = {}
+    onDeleteClick: () -> Unit = {},
+    onScheduleClick: () -> Unit = {}
 ) {
     val bgColor = when(depth) {
         0 -> Color(0xFF1E1E1E)
@@ -62,13 +64,41 @@ fun NodeItem(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text(name, modifier = Modifier.weight(1f), style = TitleNode.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium), color = Color(0xFFE0E0E0))
+            Text(
+                text = name,
+                modifier = Modifier.weight(1f),
+                style = TitleNode.copy(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+                color = Color(0xFFE0E0E0)
+            )
             
             if (meta != null) {
-                Text(meta, style = TitleNode.copy(fontSize = 10.sp), color = Color(0xFF444444), modifier = Modifier.padding(horizontal = 4.dp))
+                Text(
+                    text = meta,
+                    style = TitleNode.copy(fontSize = 10.sp),
+                    color = Color(0xFF444444),
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                // Schedule Button
+                Surface(
+                    modifier = Modifier.size(24.dp),
+                    color = if (hasSchedules) Color(0xFF0D1F3A) else Color(0xFF1A1A1A),
+                    shape = RoundedCornerShape(5.dp),
+                    border = androidx.compose.foundation.BorderStroke(0.5.dp, if (hasSchedules) Color(0xFF1565C0) else Color(0xFF2A2A2A)),
+                    onClick = onScheduleClick
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Schedule,
+                            null,
+                            tint = if (hasSchedules) Color(0xFF42A5F5) else Color(0xFF555555),
+                            modifier = Modifier.size(12.dp)
+                        )
+                    }
+                }
+
                 if (depth == 0) {
                     Surface(
                         modifier = Modifier.size(24.dp),

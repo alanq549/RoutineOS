@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.RoutineTemplate
 import com.alan.routineos.data.local.entities.SyncStatus
 import com.alan.routineos.data.repository.NodeRepository
@@ -42,10 +43,19 @@ class TemplateBuilderViewModel @Inject constructor(
                 val template = templateRepo.getById(templateId)
                 if (template != null) {
                     val nodes = nodeRepo.getAllByTemplate(template.id)
+                    
+                    // Load schedules for each node
+                    val schedulesMap = mutableMapOf<String, List<NodeSchedule>>()
+                    nodes.forEach { node ->
+                        val schedules = nodeRepo.getSchedulesForNode(node.id).first()
+                        schedulesMap[node.id] = schedules
+                    }
+
                     _uiState.update { it.copy(
                         name = template.name,
                         colorHex = template.colorHex,
                         nodes = nodes,
+                        nodeSchedules = schedulesMap,
                         isLoading = false
                     ) }
                 }
@@ -71,9 +81,30 @@ class TemplateBuilderViewModel @Inject constructor(
             parentId = parentId,
             templateId = _uiState.value.templateId ?: "TEMP_ID",
             position = _uiState.value.nodes.filter { it.parentId == parentId }.size,
-            syncStatus = SyncStatus.PENDING_SYNC
+            syncStatus = SyncStatus.PENDING_SYNC,
+            isSequential = true
         )
         _uiState.update { it.copy(nodes = it.nodes + newNode) }
+    }
+
+    fun toggleNodeSequential(nodeId: String, isSequential: Boolean) {
+        _uiState.update { state ->
+            state.copy(nodes = state.nodes.map {
+                if (it.id == nodeId) it.copy(isSequential = isSequential) else it
+            })
+        }
+        if (isSequential) {
+            // If switched back to sequential, we might want to clear schedules or just ignore them
+            // For now, let's keep them in state but they won't be used by the engine if node schedules are empty
+        }
+    }
+
+    fun updateNodeSchedules(nodeId: String, schedules: List<NodeSchedule>) {
+        _uiState.update { state ->
+            val newMap = state.nodeSchedules.toMutableMap()
+            newMap[nodeId] = schedules
+            state.copy(nodeSchedules = newMap)
+        }
     }
 
     fun updateNodeName(nodeId: String, newName: String) {
@@ -102,7 +133,10 @@ class TemplateBuilderViewModel @Inject constructor(
             }
         }
         _uiState.update { state ->
-            state.copy(nodes = state.nodes.filterNot { toDelete.contains(it.id) })
+            state.copy(
+                nodes = state.nodes.filterNot { toDelete.contains(it.id) },
+                nodeSchedules = state.nodeSchedules.filterKeys { !toDelete.contains(it) }
+            )
         }
     }
 
@@ -139,6 +173,12 @@ class TemplateBuilderViewModel @Inject constructor(
                 syncStatus = SyncStatus.PENDING_SYNC
             ) }
             nodeRepo.insertAll(finalNodes)
+
+            // Save schedules for each node
+            state.nodes.forEach { node ->
+                val schedules = state.nodeSchedules[node.id] ?: emptyList()
+                nodeRepo.saveSchedules(node.id, schedules)
+            }
             
             _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId) }
         }

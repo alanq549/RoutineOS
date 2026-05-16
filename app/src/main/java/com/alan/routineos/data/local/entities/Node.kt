@@ -20,7 +20,8 @@ data class Node(
     val updatedAt: Long = System.currentTimeMillis(),
     val deletedAt: Long? = null,
     val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
-    val version: Int = 1
+    val version: Int = 1,
+    val isSequential: Boolean = true // true si no depende de horarios específicos
 )
 
 enum class NodeStatus { PENDING, ACTIVE, COMPLETED, SKIPPED, POSTPONED }

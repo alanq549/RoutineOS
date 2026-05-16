@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSheet
 import com.alan.routineos.ui.features.template_builder.sections.*
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
 import com.alan.routineos.ui.theme.TitleNode
@@ -27,6 +29,7 @@ fun TemplateBuilderScreen(
     viewModel: TemplateBuilderViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedNodeForSchedule by remember { mutableStateOf<Node?>(null) }
     
     val colors = listOf(
         Color(0xFFF44336), Color(0xFFFF9800), Color(0xFFFFC107),
@@ -79,10 +82,27 @@ fun TemplateBuilderScreen(
 
             nodeStructureSection(
                 nodes = uiState.nodes,
+                nodeSchedules = uiState.nodeSchedules,
                 onAddNode = { parentId -> 
                     viewModel.addNode("Nuevo Nodo", "default_type", parentId) 
                 },
-                onDeleteNode = viewModel::deleteNode
+                onDeleteNode = viewModel::deleteNode,
+                onScheduleClick = { selectedNodeForSchedule = it }
+            )
+        }
+
+        if (selectedNodeForSchedule != null) {
+            NodeScheduleSheet(
+                node = selectedNodeForSchedule!!,
+                currentSchedules = uiState.nodeSchedules[selectedNodeForSchedule!!.id] ?: emptyList(),
+                onDismiss = { selectedNodeForSchedule = null },
+                onToggleSequential = { isSequential ->
+                    viewModel.toggleNodeSequential(selectedNodeForSchedule!!.id, isSequential)
+                },
+                onSave = { schedules ->
+                    viewModel.updateNodeSchedules(selectedNodeForSchedule!!.id, schedules)
+                    selectedNodeForSchedule = null
+                }
             )
         }
     }
