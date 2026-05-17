@@ -17,11 +17,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.ui.features.template_builder.components.MetadataFieldItem
 import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSheet
+import com.alan.routineos.ui.features.template_builder.components.SectionHeader
 import com.alan.routineos.ui.features.template_builder.sections.*
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
 import com.alan.routineos.ui.theme.TitleNode
 
+/**
+ * UI REFACTOR: Template Builder Screen
+ * Focused on a temporal-first workflow (Routine Composer).
+ */
 @Composable
 fun TemplateBuilderScreen(
     onBack: () -> Unit,
@@ -46,40 +52,32 @@ fun TemplateBuilderScreen(
                 onSave = viewModel::saveTemplate
             )
         },
-        containerColor = Color(0xFF121212)
+        containerColor = Color(0xFF0D1117)
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
+            // 1. IDENTITY: Name + Activity Type
             item {
-                NameSection(
+                ActivityIdentitySection(
                     name = uiState.name,
                     onNameChange = viewModel::updateName
                 )
             }
 
-            item {
-                ColorSection(
-                    selectedColorHex = uiState.colorHex,
-                    colors = colors,
-                    onColorChange = viewModel::updateColor
-                )
-            }
-
-            item {
-                RepeatSection()
-            }
-
+            // 2. TEMPORAL PLANNING: Time Mode Selector
             item {
                 TimeRangeSection()
             }
 
-            metadataSection(
-                onNavigateToTypeManager = onNavigateToTypeManager
-            )
+            // 3. RECURRENCE: Weekly Pattern
+            item {
+                RepeatSection()
+            }
 
+            // 4. ROUTINE COMPOSITION: Internal Structure
             nodeStructureSection(
                 nodes = uiState.nodes,
                 nodeSchedules = uiState.nodeSchedules,
@@ -89,6 +87,29 @@ fun TemplateBuilderScreen(
                 onDeleteNode = viewModel::deleteNode,
                 onScheduleClick = { selectedNodeForSchedule = it }
             )
+
+            // 5. ADVANCED CONFIG: Collapsible Panel (Color + Metadata)
+            item {
+                AdvancedSection {
+                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                        ColorSection(
+                            selectedColorHex = uiState.colorHex,
+                            colors = colors,
+                            onColorChange = viewModel::updateColor
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        SectionHeader(title = "Campos personalizados", onAdd = onNavigateToTypeManager)
+                        MetadataFieldItem(type = "NUM", name = "series", value = "def: 4")
+                        MetadataFieldItem(type = "NUM", name = "reps", value = "def: 8")
+                        MetadataFieldItem(type = "NUM", name = "peso", value = "unidad: kg")
+                    }
+                }
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(48.dp))
+            }
         }
 
         if (selectedNodeForSchedule != null) {
@@ -140,8 +161,8 @@ private fun TemplateBuilderTopBar(
         }
         
         Text(
-            text = if (isNewTemplate) "NUEVA ACTIVIDAD" else "EDITAR ACTIVIDAD",
-            style = TitleNode.copy(fontSize = 12.sp, letterSpacing = 0.08.sp),
+            text = if (isNewTemplate) "COMPOSER" else "EDITOR",
+            style = TitleNode.copy(fontSize = 12.sp, letterSpacing = 0.1.sp),
             color = Color(0xFFE0E0E0)
         )
         
@@ -152,7 +173,7 @@ private fun TemplateBuilderTopBar(
             enabled = canSave
         ) {
             Text(
-                "GUARDAR",
+                "SAVE",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
                 style = TitleNode.copy(fontSize = 11.sp),
                 color = if (canSave) Color.White else Color(0xFF444444)

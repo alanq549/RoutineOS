@@ -17,7 +17,11 @@ import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
 
 @Composable
-fun SectionHeader(title: String, onAdd: () -> Unit) {
+fun SectionHeader(
+    title: String, 
+    addLabel: String = "+ agregar",
+    onAdd: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -31,7 +35,7 @@ fun SectionHeader(title: String, onAdd: () -> Unit) {
             color = Color(0xFF555555)
         )
         Text(
-            "+ agregar",
+            text = addLabel,
             modifier = Modifier.clickable { onAdd() },
             style = TitleNode.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
             color = Color(0xFF1565C0)

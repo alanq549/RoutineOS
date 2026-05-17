@@ -20,16 +20,20 @@ fun LazyListScope.nodeStructureSection(
     onScheduleClick: (Node) -> Unit
 ) {
     item {
-        SectionHeader(title = "Estructura de nodos", onAdd = { onAddNode(null) })
+        SectionHeader(
+            title = "COMPOSICIÓN DE RUTINA", 
+            onAdd = { onAddNode(null) },
+            addLabel = "+ fase"
+        )
     }
 
     if (nodes.isEmpty()) {
         item {
-            NodeItem("Pecho", depth = 0, hasChildren = true)
-            NodeItem("Press banca", depth = 1, meta = "4×8")
-            NodeItem("Press inclinado", depth = 1, meta = "3×10")
-            NodeItem("Hombro", depth = 0, hasChildren = true)
-            NodeItem("Elevaciones laterales", depth = 1, meta = "3×15")
+            NodeItem("Calentamiento", depth = 0, hasChildren = true)
+            NodeItem("Movilidad Articular", depth = 1, meta = "5m")
+            NodeItem("Activación Core", depth = 1, meta = "10m")
+            NodeItem("Bloque Principal", depth = 0, hasChildren = true)
+            NodeItem("Press Banca", depth = 1, meta = "4×8")
         }
     } else {
         val rootNodes = nodes.filter { it.parentId == null }
@@ -48,7 +52,7 @@ fun LazyListScope.nodeStructureSection(
 
     item {
         Spacer(modifier = Modifier.height(12.dp))
-        AddDashedButton(text = "agregar grupo", onClick = { onAddNode(null) })
+        AddDashedButton(text = "agregar nuevo bloque", onClick = { onAddNode(null) })
         Spacer(modifier = Modifier.height(32.dp))
     }
 }

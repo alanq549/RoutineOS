@@ -6,7 +6,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import javax.inject.Inject
+import javax.inject.Singleton
 
+/**
+ * UserManager: Singleton source of truth for the current user profile.
+ * Crucial for keeping Account and Auth states in sync.
+ */
+@Singleton
 class UserManager @Inject constructor(
     private val repository: UserRepository,
 ) {
@@ -21,6 +27,8 @@ class UserManager @Inject constructor(
     val error: StateFlow<String?> = _error.asStateFlow()
 
     suspend fun loadLocal() {
+        if (_user.value != null) return // Already loaded
+
         _isLoading.value = true
         _error.value = null
         val cached = repository.getLocalUser()

@@ -1,4 +1,4 @@
-package com.alan.routineos.ui.features.library.state
+package com.alan.routineos.ui.features.library.viewmodel
 
 import com.alan.routineos.data.local.entities.RoutineTemplate
 

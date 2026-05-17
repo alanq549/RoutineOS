@@ -2,6 +2,7 @@ package com.alan.routineos.ui.features.account.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.alan.routineos.core.session.SessionManager
 import com.alan.routineos.core.session.UserManager
 import com.alan.routineos.ui.features.account.state.UserState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,7 +15,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class UserViewModel @Inject constructor(
-    private val userManager: UserManager
+    private val userManager: UserManager,
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     val userState: StateFlow<UserState> = combine(
@@ -37,6 +39,13 @@ class UserViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             userManager.loadLocal()
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            sessionManager.logout()
+            userManager.clear()
         }
     }
 

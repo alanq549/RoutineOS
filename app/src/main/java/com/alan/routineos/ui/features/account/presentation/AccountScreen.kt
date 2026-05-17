@@ -2,13 +2,14 @@ package com.alan.routineos.ui.features.account.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
@@ -18,7 +19,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,7 +27,11 @@ import com.alan.routineos.ui.features.account.state.UserState
 import com.alan.routineos.ui.features.account.viewmodel.UserViewModel
 import com.alan.routineos.ui.theme.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * ACCOUNT SCREEN REFACTOR: Premium Minimal / Calm Tech
+ * Integrated with the personal operating system identity.
+ * Avoids uppercase extreme and neon glows.
+ */
 @Composable
 fun AccountScreen(
     userViewModel: UserViewModel,
@@ -38,53 +42,16 @@ fun AccountScreen(
     val userState by userViewModel.userState.collectAsState()
 
     Scaffold(
-        containerColor = BgDark,
+        containerColor = ColorBg,
         topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        text = "PERFIL // SISTEMA",
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = JetBrainsMono,
-                        fontSize = 14.sp,
-                        letterSpacing = 2.sp
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack,
-                            contentDescription = "Volver",
-                            tint = NeonEmerald
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = BgDark.copy(alpha = 0.9f)
-                )
-            )
+            AccountTopBar(onBack)
         }
     ) { padding ->
-
-        Box(modifier = Modifier.fillMaxSize().background(BgDark)) {
-            // Glow background
-            Box(
-                modifier = Modifier
-                    .size(300.dp)
-                    .align(Alignment.TopEnd)
-                    .offset(x = 100.dp, y = (-50).dp)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(NeonEmerald.copy(alpha = 0.1f), Color.Transparent)
-                        )
-                    )
-            )
-
+        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             when (val state = userState) {
                 is UserState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = NeonEmerald)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ColorExec)
                     }
                 }
 
@@ -93,140 +60,116 @@ fun AccountScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(padding)
                             .verticalScroll(rememberScrollState())
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // User Avatar
+                        // User Identity Section
                         Box(
                             modifier = Modifier
-                                .size(100.dp)
-                                .clip(CircleShape)
-                                .background(GlassWhite)
-                                .border(1.dp, NeonEmerald.copy(alpha = 0.3f), CircleShape),
+                                .size(80.dp)
+                                .background(ColorSurface, CircleShape)
+                                .border(0.5.dp, ColorBorder, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Person,
                                 contentDescription = null,
-                                modifier = Modifier.size(50.dp),
-                                tint = NeonEmerald
+                                modifier = Modifier.size(32.dp),
+                                tint = ColorTextDim
                             )
                         }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            text = user.name.uppercase(),
-                            color = TextPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = JetBrainsMono
+                            text = user.name,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 20.sp
+                            ),
+                            color = ColorText
                         )
-                        Text(
-                            text = "ESTADO: ACTIVO",
-                            color = NeonEmerald,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = JetBrainsMono
-                        )
-
-                        Spacer(modifier = Modifier.height(40.dp))
-
-                        // Info Card
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(24.dp))
-                                .background(GlassWhite)
-                                .border(1.dp, Color.White.copy(alpha = 0.05f), RoundedCornerShape(24.dp))
-                                .padding(24.dp),
-                            verticalArrangement = Arrangement.spacedBy(20.dp)
+                        
+                        Surface(
+                            color = ColorExec.copy(alpha = 0.1f),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(top = 8.dp)
                         ) {
-                            InfoItem(label = "NOMBRE COMPLETO", value = user.name)
-                            InfoItem(label = "IDENTIFICACIÓN", value = user.id)
-                            InfoItem(label = "CORREO ELECTRÓNICO", value = user.email)
+                            Text(
+                                text = "Sincronización activa",
+                                style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                color = ColorExec,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(40.dp))
+                        Spacer(modifier = Modifier.height(48.dp))
 
-                        // Logout Button
+                        // Settings Groups
+                        InfoSection(title = "Detalles de la cuenta") {
+                            InfoRow(label = "Correo", value = user.email)
+                            InfoRow(label = "ID de Sistema", value = user.id, isMono = true)
+                        }
+
+                        Spacer(modifier = Modifier.height(32.dp))
+
+                        // Action Area
                         Button(
                             onClick = onLogout,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.Transparent
-                            ),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.4f))
+                            modifier = Modifier.fillMaxWidth().height(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.Red.copy(alpha = 0.3f))
                         ) {
-                            Icon(Icons.Default.Logout, contentDescription = null, tint = Color.Red, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text("CERRAR SESIÓN", color = Color.Red, fontWeight = FontWeight.Bold, fontFamily = JetBrainsMono, fontSize = 12.sp)
+                            Text(
+                                "Cerrar sesión",
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    color = Color.Red,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            )
                         }
                     }
                 }
                 else -> {
-                    // Idle or Error: Show Login Option
+                    // Idle state or Login Prompt
                     Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding)
-                            .padding(24.dp),
+                        modifier = Modifier.fillMaxSize().padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            modifier = Modifier.size(80.dp),
-                            tint = TextSecondary.copy(alpha = 0.5f)
+                            modifier = Modifier.size(64.dp),
+                            tint = ColorTextMuted
                         )
                         Spacer(modifier = Modifier.height(24.dp))
                         Text(
-                            text = "SIN SESIÓN ACTIVA",
-                            color = TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = JetBrainsMono
+                            text = "Sin sesión activa",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            ),
+                            color = ColorText
                         )
                         Text(
                             text = "Inicia sesión para sincronizar tus datos",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                            modifier = Modifier.padding(top = 8.dp)
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ColorTextDim,
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                         
                         Spacer(modifier = Modifier.height(40.dp))
 
                         Button(
                             onClick = onNavigateToAuth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonEmerald),
-                            shape = RoundedCornerShape(16.dp)
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Text("INICIAR SESIÓN", color = BgDark, fontWeight = FontWeight.Bold, fontFamily = JetBrainsMono)
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Google Button UI Only
-                        OutlinedButton(
-                            onClick = { /* UI Only */ },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("CONTINUAR CON GOOGLE", color = TextPrimary, fontWeight = FontWeight.Medium, fontFamily = JetBrainsMono, fontSize = 12.sp)
-                            }
+                            Text("Iniciar sesión", style = MaterialTheme.typography.labelLarge.copy(color = Color.White))
                         }
                     }
                 }
@@ -236,21 +179,81 @@ fun AccountScreen(
 }
 
 @Composable
-private fun InfoItem(label: String, value: String) {
-    Column {
+private fun AccountTopBar(onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(ColorSurface, CircleShape)
+                .border(0.5.dp, ColorBorder, CircleShape)
+                .clickable { onBack() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = null,
+                tint = ColorTextDim,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.weight(1f))
+        
+        Text(
+            text = "CUENTA",
+            style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 2.sp),
+            color = ColorTextDim
+        )
+        
+        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.size(32.dp))
+    }
+}
+
+@Composable
+private fun InfoSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+            color = ColorTextMuted,
+            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
+        )
+        Surface(
+            color = ColorSurface,
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String, isMono: Boolean = false) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
         Text(
             text = label,
-            fontSize = 9.sp,
-            fontFamily = JetBrainsMono,
-            color = NeonEmerald.copy(alpha = 0.6f),
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
+            style = MaterialTheme.typography.bodyMedium,
+            color = ColorTextDim
         )
         Text(
             text = value,
-            fontSize = 16.sp,
-            color = TextPrimary,
-            fontWeight = FontWeight.Medium
+            style = if (isMono) MetaMono.copy(fontSize = 11.sp) else MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            color = ColorText
         )
     }
 }

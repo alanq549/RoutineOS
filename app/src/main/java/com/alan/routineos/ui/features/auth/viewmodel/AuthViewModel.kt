@@ -48,11 +48,28 @@ class AuthViewModel @Inject constructor(
     private fun checkSessionAndObserve() {
         viewModelScope.launch {
             sessionManager.loadSession()
+            // Observamos tanto la sesión como el usuario para determinar la autenticación real
             sessionManager.session.collect { session ->
-                _authState.value = if (session != null) {
-                    AuthState.Authenticated(session)
+                if (session != null) {
+                    // Si hay sesión, verificamos si tenemos los datos del usuario
+                    userManager.loadLocal()
+                    if (userManager.user.value != null) {
+                        _authState.value = AuthState.Authenticated(session)
+                    } else {
+                        // Sesión técnica existe pero no hay perfil: intentamos sincronizar
+                        try {
+                            userManager.syncUser()
+                            if (userManager.user.value != null) {
+                                _authState.value = AuthState.Authenticated(session)
+                            } else {
+                                _authState.value = AuthState.Unauthenticated
+                            }
+                        } catch (e: Exception) {
+                            _authState.value = AuthState.Unauthenticated
+                        }
+                    }
                 } else {
-                    AuthState.Unauthenticated
+                    _authState.value = AuthState.Unauthenticated
                 }
             }
         }
@@ -91,6 +108,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             sessionManager.logout()
             userManager.clear()
+            _authState.value = AuthState.Unauthenticated
             _uiEvent.emit(UiEvent.Navigate("auth"))
         }
     }

@@ -19,6 +19,7 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
@@ -27,20 +28,18 @@ import com.alan.routineos.ui.core.startup.AppStartupViewModel
 import com.alan.routineos.ui.core.startup.navigation.LAUNCH_ROUTE
 import com.alan.routineos.ui.core.startup.navigation.launchScreen
 import com.alan.routineos.ui.features.account.navigation.accountScreen
+import com.alan.routineos.ui.features.auth.navigation.AUTH_ROUTE
 import com.alan.routineos.ui.features.auth.navigation.authScreen
 import com.alan.routineos.ui.features.auth.navigation.navigateToAuth
 import com.alan.routineos.ui.features.execute.navigation.executeScreen
 import com.alan.routineos.ui.features.execute.navigation.navigateToExecute
-import com.alan.routineos.ui.features.library.navigation.libraryScreen
-import com.alan.routineos.ui.features.node_type_manager.navigation.navigateToNodeTypeManager
 import com.alan.routineos.ui.features.node_type_manager.navigation.nodeTypeManagerScreen
-import com.alan.routineos.ui.features.onboarding.navigation.navigateToOnboarding
+import com.alan.routineos.ui.features.onboarding.navigation.ONBOARDING_ROUTE
 import com.alan.routineos.ui.features.onboarding.navigation.onboardingScreen
-import com.alan.routineos.ui.features.planner.navigation.plannerScreen
 import com.alan.routineos.ui.features.stats.navigation.statsScreen
+import com.alan.routineos.ui.features.system.navigation.systemScreen
 import com.alan.routineos.ui.features.template_builder.navigation.navigateToTemplateBuilder
 import com.alan.routineos.ui.features.template_builder.navigation.templateBuilderScreen
-import com.alan.routineos.ui.features.today.navigation.navigateToToday
 import com.alan.routineos.ui.features.today.navigation.todayScreen
 import com.alan.routineos.ui.theme.ColorSurface
 
@@ -113,13 +112,10 @@ fun AppNavHost(
                     val navOptions = navOptions {
                         popUpTo(LAUNCH_ROUTE) { inclusive = true }
                     }
-                    when (finalState) {
-                        AppStartupState.ShowHome -> navController.navigateToToday(navOptions)
-                        AppStartupState.ShowOnboarding -> navController.navigateToOnboarding(
-                            navOptions
-                        )
-
-                        else -> navController.navigateToToday(navOptions)
+                    if (finalState is AppStartupState.ShowHome) {
+                        navController.navigate(Screen.Today.route, navOptions)
+                    } else {
+                        navController.navigate(Screen.Onboarding.route, navOptions)
                     }
                 }
             )
@@ -127,17 +123,17 @@ fun AppNavHost(
             // 2. Initial Flow Orchestration
             onboardingScreen(
                 onFinish = {
-                    navController.navigateToToday(navOptions {
-                        popUpTo("onboarding") { inclusive = true }
-                    })
+                    navController.navigate(Screen.Today.route) {
+                        popUpTo(ONBOARDING_ROUTE) { inclusive = true }
+                    }
                 }
             )
 
             authScreen(
                 onLoginSuccess = {
-                    navController.navigateToToday(navOptions {
-                        popUpTo(Screen.Auth.route) { inclusive = true }
-                    })
+                    navController.navigate(Screen.Today.route) {
+                        popUpTo(AUTH_ROUTE) { inclusive = true }
+                    }
                 }
             )
 
@@ -148,25 +144,20 @@ fun AppNavHost(
                 }
             )
 
-            plannerScreen()
-
             executeScreen(
                 onBack = { navController.popBackStack() }
             )
 
-            libraryScreen(
-                onNavigateToBuilder = { templateId ->
+            systemScreen(
+                onNavigateToBuilder = { templateId: String ->
                     navController.navigateToTemplateBuilder(templateId)
-                },
-                onNavigateToTypes = {
-                    navController.navigateToNodeTypeManager()
                 }
             )
 
             templateBuilderScreen(
                 onBack = { navController.popBackStack() },
                 onNavigateToTypeManager = {
-                    navController.navigateToNodeTypeManager()
+                    navController.navigate(Screen.NodeTypeManager.route)
                 }
             )
 
