@@ -19,7 +19,6 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navOptions
@@ -149,8 +148,8 @@ fun AppNavHost(
             )
 
             systemScreen(
-                onNavigateToBuilder = { templateId: String ->
-                    navController.navigateToTemplateBuilder(templateId)
+                onNavigateToBuilder = { templateId, initialName, initialColor ->
+                    navController.navigateToTemplateBuilder(templateId, initialName, initialColor)
                 }
             )
 

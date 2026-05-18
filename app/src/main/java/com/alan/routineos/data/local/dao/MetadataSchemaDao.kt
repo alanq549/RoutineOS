@@ -6,6 +6,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface MetadataSchemaDao {
+    @Query("SELECT * FROM node_metadata_schemas ORDER BY position ASC")
+    fun getAll(): Flow<List<NodeMetadataSchema>>
+
     @Query("SELECT * FROM node_metadata_schemas WHERE typeId = :typeId ORDER BY position ASC")
     fun getByTypeId(typeId: String): Flow<List<NodeMetadataSchema>>
 

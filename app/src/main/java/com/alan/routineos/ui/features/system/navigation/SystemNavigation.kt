@@ -12,7 +12,7 @@ fun NavController.navigateToSystem(navOptions: NavOptions? = null) {
     this.navigate(SYSTEM_ROUTE, navOptions)
 }
 
-fun NavGraphBuilder.systemScreen(onNavigateToBuilder: (String) -> Unit) {
+fun NavGraphBuilder.systemScreen(onNavigateToBuilder: (String, String?, String?) -> Unit) {
     composable(SYSTEM_ROUTE) {
         SystemScreen(onNavigateToBuilder = onNavigateToBuilder)
     }

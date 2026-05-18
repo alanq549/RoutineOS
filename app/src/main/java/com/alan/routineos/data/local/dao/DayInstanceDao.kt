@@ -7,8 +7,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DayInstanceDao {
-    @Query("SELECT * FROM day_instances WHERE date = :date LIMIT 1")
-    fun getByDate(date: Long): Flow<DayInstance?>
+    @Query("SELECT * FROM day_instances WHERE date = :date")
+    fun getAllByDate(date: Long): Flow<List<DayInstance>>
 
     @Query("SELECT * FROM day_instances WHERE date >= :from AND date <= :to ORDER BY date ASC")
     fun getInRange(from: Long, to: Long): Flow<List<DayInstance>>

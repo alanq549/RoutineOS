@@ -28,9 +28,8 @@ import com.alan.routineos.ui.features.account.viewmodel.UserViewModel
 import com.alan.routineos.ui.theme.*
 
 /**
- * ACCOUNT SCREEN REFACTOR: Premium Minimal / Calm Tech
+ * ACCOUNT SCREEN: Premium Minimal / Calm Tech
  * Integrated with the personal operating system identity.
- * Avoids uppercase extreme and neon glows.
  */
 @Composable
 fun AccountScreen(
@@ -116,7 +115,10 @@ fun AccountScreen(
 
                         // Action Area
                         Button(
-                            onClick = onLogout,
+                            onClick = {
+                                // Llamamos al proceso de logout y pasamos la navegación como callback
+                                userViewModel.logout(onComplete = onLogout)
+                            },
                             modifier = Modifier.fillMaxWidth().height(50.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                             shape = RoundedCornerShape(12.dp),
@@ -161,7 +163,7 @@ fun AccountScreen(
                             modifier = Modifier.padding(top = 4.dp)
                         )
                         
-                        Spacer(modifier = Modifier.height(40.dp))
+                        Spacer(modifier = Modifier.height(48.dp))
 
                         Button(
                             onClick = onNavigateToAuth,

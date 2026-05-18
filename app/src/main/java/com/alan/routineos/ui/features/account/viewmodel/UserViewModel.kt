@@ -42,10 +42,16 @@ class UserViewModel @Inject constructor(
         }
     }
 
-    fun logout() {
+    /**
+     * Executes logout process and triggers callback when finished.
+     * Running it in viewModelScope but ensuring we don't navigate away 
+     * before the request is at least sent.
+     */
+    fun logout(onComplete: () -> Unit) {
         viewModelScope.launch {
-            sessionManager.logout()
+            sessionManager.logout() // This sends the request to backend
             userManager.clear()
+            onComplete()
         }
     }
 

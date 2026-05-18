@@ -2,6 +2,8 @@ package com.alan.routineos.data.local
 
 import androidx.room.TypeConverter
 import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.ui.features.template_builder.sections.ContextCategory
+import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 
 class Converters {
     @TypeConverter
@@ -33,4 +35,16 @@ class Converters {
 
     @TypeConverter
     fun toOverrideType(value: String) = OverrideType.valueOf(value)
+
+    @TypeConverter
+    fun fromContextCategory(value: ContextCategory) = value.name
+
+    @TypeConverter
+    fun toContextCategory(value: String) = ContextCategory.valueOf(value)
+
+    @TypeConverter
+    fun fromTimeMode(value: TimeMode) = value.name
+
+    @TypeConverter
+    fun toTimeMode(value: String) = TimeMode.valueOf(value)
 }

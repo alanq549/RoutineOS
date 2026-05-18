@@ -15,6 +15,15 @@ interface ScheduleDao {
     """)
     fun getActiveForWeekday(weekday: Int, date: Long): Flow<List<Schedule>>
 
+    @Query("SELECT * FROM schedules WHERE templateId = :templateId")
+    fun getByTemplate(templateId: String): Flow<List<Schedule>>
+
+    @Query("SELECT * FROM schedules")
+    fun getAll(): Flow<List<Schedule>>
+
+    @Query("DELETE FROM schedules WHERE templateId = :templateId")
+    suspend fun deleteByTemplate(templateId: String)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(schedule: Schedule)
 

@@ -4,36 +4,16 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,14 +22,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.node_type_manager.components.schema.ManagerTextField
-import com.alan.routineos.ui.theme.ColorBorder
-import com.alan.routineos.ui.theme.ColorExec
-import com.alan.routineos.ui.theme.ColorPlan
-import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.ui.theme.ColorText
-import com.alan.routineos.ui.theme.ColorTextDim
-import com.alan.routineos.ui.theme.MetaMono
-import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.*
 
 @Composable
 fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
@@ -64,7 +37,7 @@ fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
         ) {
             Text(
                 text = if (query.isEmpty()) "Buscar actividad..." else query,
-                style = TitleNode.copy(fontSize = 16.sp),
+                style = TitleNode.copy(fontSize = 14.sp),
                 color = if (query.isEmpty()) ColorTextDim else ColorText,
                 modifier = Modifier.weight(1f)
             )
@@ -80,15 +53,18 @@ fun TemplateCard(
     activeDays: List<Int>,
     timeRange: String? = null,
     onClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() },
         color = ColorSurface,
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -113,15 +89,36 @@ fun TemplateCard(
                     color = ColorText,
                     modifier = Modifier.weight(1f)
                 )
-                IconButton(onClick = onMoreClick, modifier = Modifier.size(24.dp)) {
-                    Icon(
-                        Icons.Default.MoreVert,
-                        contentDescription = null,
-                        tint = ColorTextDim,
-                        modifier = Modifier.size(20.dp)
-                    )
+                
+                Box {
+                    IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.MoreVert, null, tint = ColorTextDim, modifier = Modifier.size(20.dp))
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Editar", style = MetaMono) },
+                            onClick = {
+                                showMenu = false
+                                onEdit()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp)) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Eliminar", color = Color.Red, style = MetaMono) },
+                            onClick = {
+                                showMenu = false
+                                onDelete()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(18.dp)) }
+                        )
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -129,19 +126,18 @@ fun TemplateCard(
                     style = MetaMono.copy(fontSize = 10.sp),
                     color = ColorTextDim
                 )
-                if (timeRange != null) {
+                if (!timeRange.isNullOrBlank()) {
                     Text(
-                        text = " · $timeRange",
-                        style = MetaMono.copy(fontSize = 10.sp),
-                        color = ColorTextDim
+                        text = "  •  $timeRange",
+                        style = MetaMono.copy(fontSize = 10.sp, color = ColorExec)
                     )
                 }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val days = listOf("L", "Ma", "Mi", "J", "V", "S", "D")
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val days = listOf("L", "M", "M", "J", "V", "S", "D")
                 days.forEachIndexed { index, day ->
                     val isActive = activeDays.contains(index)
                     DayBadge(day, isActive)
@@ -155,61 +151,52 @@ fun TemplateCard(
 fun DayBadge(day: String, isActive: Boolean) {
     Box(
         modifier = Modifier
-            .size(32.dp, 22.dp)
+            .size(28.dp, 20.dp)
             .background(
-                color = if (isActive) ColorPlan.copy(alpha = 0.2f) else Color.Transparent,
+                color = if (isActive) ColorExec.copy(alpha = 0.1f) else Color.Transparent,
                 shape = RoundedCornerShape(4.dp)
             )
             .border(
-                width = 1.dp,
-                color = if (isActive) ColorPlan else ColorBorder,
+                width = 0.5.dp,
+                color = if (isActive) ColorExec else Color(0xFF222222),
                 shape = RoundedCornerShape(4.dp)
             ),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = day,
-            style = MetaMono.copy(fontSize = 10.sp),
-            color = if (isActive) ColorPlan else ColorTextDim
+            style = MetaMono.copy(fontSize = 9.sp),
+            color = if (isActive) Color.White else Color(0xFF444444)
         )
     }
 }
 
 @Composable
 fun QuickCreateCard(onClick: () -> Unit) {
-    val borderColor = ColorBorder
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(100.dp)
+            .height(80.dp)
             .clickable { onClick() }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             drawRoundRect(
-                color = borderColor,
+                color = Color(0xFF222222),
                 style = Stroke(
-                    width = 2f,
+                    width = 1.dp.toPx(),
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
                 ),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(12.dp.toPx())
             )
         }
-        Column(
+        Row(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
         ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(32.dp),
-                tint = ColorTextDim
-            )
-            Text(
-                "Nueva actividad",
-                style = TitleNode,
-                color = ColorTextDim
-            )
+            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp), tint = ColorTextDim)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Nueva actividad", style = TitleNode.copy(fontSize = 14.sp), color = ColorTextDim)
         }
     }
 }
@@ -221,74 +208,29 @@ fun QuickCreateSheet(
     onCreate: (name: String, colorHex: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf("#2196F3") }
-    val colors = listOf(
-        "#F44336",
-        "#FF9800",
-        "#FFC107",
-        "#4CAF50",
-        "#2196F3",
-        "#9C27B0",
-        "#795548",
-        "#607D8B"
-    )
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = ColorSurface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 40.dp)
-        ) {
-            Text("NUEVA ACTIVIDAD", style = MetaMono, color = ColorTextDim)
+        Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
+            Text("¿QUÉ VAMOS A ORGANIZAR?", style = MetaMono.copy(fontSize = 10.sp), color = ColorTextDim)
             Spacer(modifier = Modifier.height(16.dp))
-
             ManagerTextField(
                 value = name,
                 onValueChange = { name = it },
-                placeholder = "ej: Rutina mañanera, Ciclismo, Trabajo...",
+                placeholder = "Ej. Gym, Estudiar, Meditación...",
                 isFocused = true
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                colors.forEach { color ->
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .background(
-                                Color(android.graphics.Color.parseColor(color)),
-                                CircleShape
-                            )
-                            .border(
-                                width = if (selectedColor == color) 2.dp else 0.dp,
-                                color = Color.White,
-                                shape = CircleShape
-                            )
-                            .clickable { selectedColor = color }
-                    )
-                }
-            }
-
             Spacer(modifier = Modifier.height(32.dp))
-
             Button(
-                onClick = { onCreate(name, selectedColor) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
+                onClick = { onCreate(name, "#2196F3") },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                 shape = RoundedCornerShape(12.dp),
                 enabled = name.isNotBlank()
             ) {
-                Text("CREAR Y CONFIGURAR", style = TitleNode.copy(color = Color.White))
+                Text("CONTINUAR", style = TitleNode.copy(color = Color.White))
             }
         }
     }

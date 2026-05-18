@@ -34,7 +34,6 @@ data class ResolvedNodeUi(
     val id: String,
     val name: String,
     val depth: Int,
-    val time: String? = null, // Horario específico del bloque
     val isCompleted: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList()
 )

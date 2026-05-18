@@ -3,56 +3,75 @@ package com.alan.routineos.ui.features.system.tabs
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.alan.routineos.ui.features.library.components.QuickCreateCard
 import com.alan.routineos.ui.features.library.components.QuickCreateSheet
 import com.alan.routineos.ui.features.library.components.SearchBar
 import com.alan.routineos.ui.features.library.components.TemplateCard
-import com.alan.routineos.ui.features.system.model.ExampleTemplate
+import com.alan.routineos.ui.features.library.viewmodel.LibraryViewModel
 import com.alan.routineos.ui.theme.*
 
 @Composable
 fun ActivitiesTab(
-    onNavigateToBuilder: (String) -> Unit
+    viewModel: LibraryViewModel = hiltViewModel(),
+    onNavigateToBuilder: (String, String?, String?) -> Unit
 ) {
-    var searchQuery by remember { mutableStateOf("") }
+    val uiState by viewModel.uiState.collectAsState()
     var showCreateSheet by remember { mutableStateOf(false) }
-
-    val exampleActivities = listOf(
-        ExampleTemplate("Semestre 8", "#2196F3", "6 materias · aula, profesor", listOf(0, 1, 2, 3, 4), "7:00–14:00"),
-        ExampleTemplate("Push Day", "#F44336", "5 ejercicios · series, reps, peso", listOf(0, 3), null),
-        ExampleTemplate("Pull Day", "#9C27B0", "5 ejercicios · series, reps, peso", listOf(1, 4), null),
-        ExampleTemplate("Despertar", "#4CAF50", "sin nodos · hora fija", listOf(0, 1, 2, 3, 4, 5, 6), null),
-        ExampleTemplate("Dormir", "#FF9800", "sin nodos · hora fija", listOf(0, 1, 2, 3, 4, 5, 6), null)
-    )
 
     Column(modifier = Modifier.fillMaxSize()) {
         Box(modifier = Modifier.padding(horizontal = 16.dp)) {
-            SearchBar(query = searchQuery, onQueryChange = { searchQuery = it })
+            SearchBar(
+                query = uiState.searchQuery,
+                onQueryChange = viewModel::updateSearchQuery
+            )
         }
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
-        ) {
-            items(exampleActivities) { item ->
-                TemplateCard(
-                    name = item.name,
-                    colorHex = item.color,
-                    metaSummary = item.meta,
-                    activeDays = item.days,
-                    timeRange = item.time,
-                    onClick = { onNavigateToBuilder("id") },
-                    onMoreClick = {}
-                )
+        if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ColorExec)
             }
-            item {
-                QuickCreateCard(onClick = { showCreateSheet = true })
+        } else if (uiState.definitions.isEmpty() && uiState.searchQuery.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        "Aún no tienes actividades. Crea la primera.",
+                        style = TitleNode,
+                        color = ColorTextDim
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    QuickCreateCard(onClick = { showCreateSheet = true })
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
+            ) {
+                items(uiState.definitions, key = { it.id }) { def ->
+                    TemplateCard(
+                        name = def.name,
+                        colorHex = def.colorHex,
+                        metaSummary = def.blocksSummary,
+                        activeDays = def.activeDays,
+                        timeRange = def.timeLabel,
+                        onClick = { onNavigateToBuilder(def.id, null, null) },
+                        onEdit = { onNavigateToBuilder(def.id, null, null) },
+                        onDelete = { viewModel.deleteTemplate(def.id) }
+                    )
+                }
+                item {
+                    QuickCreateCard(onClick = { showCreateSheet = true })
+                }
             }
         }
     }
@@ -60,9 +79,9 @@ fun ActivitiesTab(
     if (showCreateSheet) {
         QuickCreateSheet(
             onDismiss = { showCreateSheet = false },
-            onCreate = { _, _ ->
+            onCreate = { name, color ->
                 showCreateSheet = false
-                onNavigateToBuilder("new")
+                onNavigateToBuilder("new", name, color)
             }
         )
     }

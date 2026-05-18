@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.network.toApiError
 import com.alan.routineos.core.session.SessionManager
 import com.alan.routineos.core.session.UserManager
+import com.alan.routineos.core.util.DeviceInfoProvider
 import com.alan.routineos.data.remote.auth.login.LoginRequest
 import com.alan.routineos.data.remote.auth.register.RegisterRequest
 import com.alan.routineos.domain.usecase.LoginUseCase
@@ -27,7 +28,8 @@ class AuthViewModel @Inject constructor(
     private val loginUseCase: LoginUseCase,
     private val verifyEmailUseCase: VerifyEmailCodeUseCase,
     private val sessionManager: SessionManager,
-    private val userManager: UserManager
+    private val userManager: UserManager,
+    private val deviceInfoProvider: DeviceInfoProvider
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -47,37 +49,43 @@ class AuthViewModel @Inject constructor(
 
     private fun checkSessionAndObserve() {
         viewModelScope.launch {
-            sessionManager.loadSession()
-            // Observamos tanto la sesión como el usuario para determinar la autenticación real
-            sessionManager.session.collect { session ->
-                if (session != null) {
-                    // Si hay sesión, verificamos si tenemos los datos del usuario
-                    userManager.loadLocal()
-                    if (userManager.user.value != null) {
-                        _authState.value = AuthState.Authenticated(session)
-                    } else {
-                        // Sesión técnica existe pero no hay perfil: intentamos sincronizar
-                        try {
-                            userManager.syncUser()
-                            if (userManager.user.value != null) {
+            try {
+                sessionManager.loadSession()
+                sessionManager.session.collect { session ->
+                    if (session != null) {
+                        userManager.loadLocal()
+                        if (userManager.user.value != null) {
+                            _authState.value = AuthState.Authenticated(session)
+                        } else {
+                            val success = runCatching { userManager.syncUser() }.isSuccess
+                            if (success && userManager.user.value != null) {
                                 _authState.value = AuthState.Authenticated(session)
                             } else {
+                                sessionManager.clear()
                                 _authState.value = AuthState.Unauthenticated
                             }
-                        } catch (e: Exception) {
-                            _authState.value = AuthState.Unauthenticated
                         }
+                    } else {
+                        _authState.value = AuthState.Unauthenticated
                     }
-                } else {
-                    _authState.value = AuthState.Unauthenticated
                 }
+            } catch (e: Exception) {
+                _authState.value = AuthState.Unauthenticated
             }
         }
     }
 
-    fun login(request: LoginRequest) {
+    fun login(email: String, password: String) {
         viewModelScope.launch {
             _authState.value = AuthState.Loading
+            
+            val request = LoginRequest(
+                email = email,
+                password = password,
+                timezone = deviceInfoProvider.getTimezone(),
+                device = deviceInfoProvider.getDeviceRequest()
+            )
+
             runCatching {
                 loginUseCase(request)
             }.onSuccess { session ->
@@ -89,7 +97,7 @@ class AuthViewModel @Inject constructor(
                 when (error.code) {
                     "EMAIL_NOT_VERIFIED" -> {
                         _authState.value = AuthState.EmailNotVerified(
-                            email = request.email,
+                            email = email,
                             message = error.message
                         )
                     }
@@ -104,25 +112,36 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    fun register(name: String, email: String, password: String, onCodeSent: () -> Unit) {
+        viewModelScope.launch {
+            _authState.value = AuthState.Loading
+            
+            val request = RegisterRequest(
+                email = email,
+                password = password,
+                name = name,
+                timezone = deviceInfoProvider.getTimezone(),
+                device = deviceInfoProvider.getDeviceRequest()
+            )
+
+            runCatching {
+                registerUseCase(request)
+            }.onSuccess {
+                pendingEmail = email
+                onCodeSent()
+            }.onFailure { throwable ->
+                val error = throwable.toApiError()
+                _authState.value = AuthState.Error(error.message)
+            }
+        }
+    }
+
     fun logout() {
         viewModelScope.launch {
             sessionManager.logout()
             userManager.clear()
             _authState.value = AuthState.Unauthenticated
             _uiEvent.emit(UiEvent.Navigate("auth"))
-        }
-    }
-
-    fun register(request: RegisterRequest, onCodeSent: () -> Unit) {
-        viewModelScope.launch {
-            runCatching {
-                registerUseCase(request)
-            }.onSuccess {
-                pendingEmail = request.email
-                onCodeSent()
-            }.onFailure {
-                _authState.value = AuthState.Error(it.message ?: "Error")
-            }
         }
     }
 

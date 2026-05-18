@@ -3,19 +3,7 @@ package com.alan.routineos.ui.features.node_type_manager.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -23,17 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,12 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.node_type_manager.components.schema.SchemaFieldItem
-import com.alan.routineos.ui.features.node_type_manager.components.schema.TypeChip
 import com.alan.routineos.ui.features.node_type_manager.components.sheets.AddSchemaSheet
 import com.alan.routineos.ui.features.node_type_manager.components.sheets.CreateTypeSheet
 import com.alan.routineos.ui.features.node_type_manager.viewmodel.NodeTypeManagerViewModel
-import com.alan.routineos.ui.theme.MetaMono
-import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -68,116 +46,81 @@ fun NodeTypeManagerScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(Color(0xFF1A1A1A), CircleShape)
-                        .border(0.5.dp, Color(0xFF2A2A2A), CircleShape)
-                        .clickable { onBack() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = null,
-                        tint = Color(0xFF777777),
-                        modifier = Modifier.size(16.dp)
-                    )
+                IconButton(onClick = onBack, modifier = Modifier.size(32.dp).background(ColorSurface, CircleShape)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ColorTextDim, modifier = Modifier.size(16.dp))
                 }
 
                 Text(
-                    text = "TIPOS DE CAMPOS",
-                    style = TitleNode.copy(fontSize = 12.sp, letterSpacing = 0.08.sp),
-                    color = Color(0xFFE0E0E0)
+                    text = "MOLDES DE INFORMACIÓN",
+                    style = TitleNode.copy(fontSize = 11.sp, letterSpacing = 1.sp),
+                    color = Color.White
                 )
 
                 Text(
-                    "+ Tipo",
+                    "CREAR",
                     modifier = Modifier.clickable { showCreateTypeSheet = true },
-                    style = TitleNode.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
-                    color = Color(0xFF1565C0)
+                    style = TitleNode.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = ColorExec
                 )
             }
         },
-        containerColor = Color(0xFF121212)
+        containerColor = ColorBg
     ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
+            modifier = Modifier.padding(paddingValues).fillMaxSize()
         ) {
             item {
-                Text(
-                    "TIPOS DEFINIDOS",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-                    style = MetaMono.copy(fontSize = 9.sp),
-                    color = Color(0xFF555555)
-                )
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Build, null, tint = ColorExec, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("MIS HERRAMIENTAS", style = MetaMono.copy(fontSize = 9.sp), color = ColorTextDim)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        "Crea 'moldes' para tus actividades. Por ejemplo, un molde de 'Gym' que siempre pida peso y repeticiones, o uno de 'Uni' para el número de aula.",
+                        style = TitleNode.copy(fontSize = 12.sp, lineHeight = 18.sp),
+                        color = ColorTextDim.copy(alpha = 0.6f)
+                    )
+                }
 
                 FlowRow(
-                    modifier = Modifier.padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     uiState.nodeTypes.forEach { type ->
                         val isSelected = uiState.selectedType?.id == type.id
-                        TypeChip(
-                            text = type.name,
-                            isSelected = isSelected,
-                            onClick = { viewModel.selectType(if (isSelected) null else type) }
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.selectType(if (isSelected) null else type) },
+                            label = { Text(type.name, style = MetaMono.copy(fontSize = 10.sp)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                containerColor = ColorSurface,
+                                selectedContainerColor = ColorExec.copy(alpha = 0.2f),
+                                labelColor = ColorTextDim,
+                                selectedLabelColor = Color.White
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                enabled = true,
+                                selected = isSelected,
+                                borderColor = Color(0xFF222222),
+                                selectedBorderColor = ColorExec
+                            )
                         )
                     }
                 }
-
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
             if (uiState.selectedType != null) {
                 item {
-                    Surface(
-                        modifier = Modifier
-                            .padding(horizontal = 14.dp, vertical = 8.dp)
-                            .fillMaxWidth(),
-                        color = Color(0xFF0D1F3A),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                uiState.selectedType!!.name.uppercase(),
-                                style = TitleNode.copy(fontSize = 12.sp, letterSpacing = 0.06.sp),
-                                color = Color(0xFF42A5F5)
-                            )
-                            Text(
-                                "cerrar \u00d7",
-                                modifier = Modifier.clickable { viewModel.selectType(null) },
-                                style = TitleNode.copy(fontSize = 10.sp),
-                                color = Color(0xFF1565C0)
-                            )
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 14.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "CAMPOS DEL TIPO",
-                            style = MetaMono.copy(fontSize = 9.sp),
-                            color = Color(0xFF555555)
-                        )
-                        Text(
-                            "+ campo",
-                            modifier = Modifier.clickable { showAddSchemaSheet = true },
-                            style = TitleNode.copy(fontSize = 10.sp),
-                            color = Color(0xFF1565C0)
-                        )
-                    }
+                    Text(
+                        "DATOS QUE PIDE EL MOLDE: ${uiState.selectedType!!.name.uppercase()}",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MetaMono.copy(fontSize = 9.sp),
+                        color = ColorExec
+                    )
                 }
 
                 items(uiState.schemasForSelectedType) { schema ->
@@ -188,50 +131,24 @@ fun NodeTypeManagerScreen(
                 }
 
                 item {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 14.dp)
-                            .fillMaxWidth()
-                            .clickable { showAddSchemaSheet = true }
+                    Button(
+                        onClick = { showAddSchemaSheet = true },
+                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = ColorSurface),
+                        shape = RoundedCornerShape(10.dp),
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
                     ) {
-                        LocalAddDashedButton(text = "nuevo campo")
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(14.dp), tint = ColorExec)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Agregar campo a este molde", style = TitleNode.copy(fontSize = 12.sp), color = Color.White)
                     }
                 }
             } else {
-                uiState.nodeTypes.forEach { type ->
-                    item {
-                        Text(
-                            "VISTA PREVIA \u00b7 ${type.name.uppercase()}",
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
-                            style = MetaMono.copy(fontSize = 9.sp),
-                            color = Color(0xFF555555)
-                        )
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 14.dp)
-                                .fillMaxWidth()
-                                .height(44.dp)
-                                .background(
-                                    Color(0xFF1E1E1E).copy(alpha = 0.5f),
-                                    RoundedCornerShape(8.dp)
-                                )
-                                .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
-                                .padding(horizontal = 12.dp),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            Text(
-                                "Selecciona el tipo para editar sus campos",
-                                style = TitleNode.copy(fontSize = 11.sp),
-                                color = Color(0xFF444444)
-                            )
-                        }
+                item {
+                    Box(modifier = Modifier.fillMaxWidth().padding(top = 60.dp), contentAlignment = Alignment.Center) {
+                        Text("Toca un molde arriba para ver sus detalles", style = MetaMono.copy(fontSize = 10.sp), color = Color(0xFF333333))
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
             }
         }
 
@@ -249,48 +166,9 @@ fun NodeTypeManagerScreen(
             AddSchemaSheet(
                 onDismiss = { showAddSchemaSheet = false },
                 onAdd = { name, label, type, default, unit ->
-                    viewModel.addSchemaFull(
-                        uiState.selectedType!!.id,
-                        name,
-                        label,
-                        type,
-                        default,
-                        unit
-                    )
+                    viewModel.addSchemaFull(uiState.selectedType!!.id, name, label, type, default, unit)
                     showAddSchemaSheet = false
                 }
-            )
-        }
-    }
-}
-
-@Composable
-fun LocalAddDashedButton(text: String, onClick: () -> Unit = {}) {
-    Surface(
-        modifier = Modifier
-            .padding(vertical = 4.dp)
-            .fillMaxWidth(),
-        color = Color.Transparent,
-        shape = RoundedCornerShape(8.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF2A2A2A)),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier.padding(9.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = null,
-                tint = Color(0xFF444444),
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text,
-                style = TitleNode.copy(fontSize = 11.sp, fontWeight = FontWeight.Medium),
-                color = Color(0xFF444444)
             )
         }
     }

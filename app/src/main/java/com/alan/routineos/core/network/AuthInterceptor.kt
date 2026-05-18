@@ -25,10 +25,11 @@ class AuthInterceptor @Inject constructor(
         var request = chain.request()
         val path = request.url().encodedPath()
 
+        // Solo saltamos el interceptor para login y refresh. 
+        // Logout SI debe llevar el token para identificar la sesión en el servidor.
         if (
             path.contains("/auth/refresh") ||
             path.contains("/auth/login") ||
-            path.contains("/auth/logout") ||
             request.header("X-Retry") != null
         ) {
             return chain.proceed(request)

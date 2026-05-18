@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SystemScreen(
-    onNavigateToBuilder: (String) -> Unit
+    onNavigateToBuilder: (String, String?, String?) -> Unit
 ) {
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
@@ -33,7 +33,7 @@ fun SystemScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text("MI SISTEMA", style = MetaMono, color = ColorText)
-                    Text("5 actividades", style = MetaMono, color = ColorTextDim)
+                    Text("ACTIVIDADES", style = MetaMono, color = ColorTextDim)
                 }
                 TabRow(
                     selectedTabIndex = pagerState.currentPage,
@@ -77,7 +77,7 @@ fun SystemScreen(
                 .fillMaxSize()
         ) { page ->
             when (page) {
-                0 -> ActivitiesTab(onNavigateToBuilder)
+                0 -> ActivitiesTab(onNavigateToBuilder = onNavigateToBuilder)
                 1 -> AdjustmentsTab()
                 else -> Unit
             }

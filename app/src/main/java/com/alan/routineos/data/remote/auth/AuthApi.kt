@@ -9,6 +9,7 @@ import com.alan.routineos.data.remote.auth.register.RegisterRequest
 import com.alan.routineos.data.remote.auth.register.RegisterResponse
 import com.alan.routineos.data.remote.auth.verify.VerifyEmailCodeRequest
 import com.alan.routineos.data.remote.auth.verify.VerifyEmailResponse
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.POST
 
@@ -31,10 +32,8 @@ interface AuthApi {
         @Body request: VerifyEmailCodeRequest
     ): VerifyEmailResponse
 
-    @POST( "auth/logout")
-    suspend fun logout (
+    @POST("auth/logout")
+    suspend fun logout(
         @Body request: LogoutRequest
-    ): LogoutRequest
-
-
+    ): ResponseBody
 }

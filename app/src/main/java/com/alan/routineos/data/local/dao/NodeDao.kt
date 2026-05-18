@@ -32,4 +32,7 @@ interface NodeDao {
 
     @Update
     suspend fun update(node: Node)
+
+    @Query("DELETE FROM nodes WHERE templateId = :templateId AND instanceId IS NULL")
+    suspend fun deleteByTemplate(templateId: String)
 }

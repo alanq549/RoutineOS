@@ -19,6 +19,7 @@ import com.alan.routineos.ui.theme.MetaMono
 
 @Composable
 fun AdvancedSection(
+    title: String = "CONFIGURACIÓN AVANZADA",
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -35,7 +36,7 @@ fun AdvancedSection(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(
-                "CONFIGURACIÓN AVANZADA",
+                title,
                 style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
                 color = if (expanded) Color.White else Color(0xFF444444)
             )

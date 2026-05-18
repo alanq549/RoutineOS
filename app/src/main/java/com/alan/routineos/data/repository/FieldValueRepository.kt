@@ -10,6 +10,8 @@ import javax.inject.Singleton
 class FieldValueRepository @Inject constructor(
     private val fieldValueDao: FieldValueDao
 ) {
+    fun getAll(): Flow<List<NodeFieldValue>> = fieldValueDao.getAll()
+
     fun getByNode(nodeId: String): Flow<List<NodeFieldValue>> = fieldValueDao.getByNode(nodeId)
     
     suspend fun getByNodeAndField(nodeId: String, fieldName: String): NodeFieldValue? = 

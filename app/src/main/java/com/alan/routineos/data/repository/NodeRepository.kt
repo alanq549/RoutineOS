@@ -29,6 +29,8 @@ class NodeRepository @Inject constructor(
     
     suspend fun update(node: Node) = nodeDao.update(node)
 
+    suspend fun deleteByTemplate(templateId: String) = nodeDao.deleteByTemplate(templateId)
+
     // NodeSchedule methods
     fun getSchedulesForNode(nodeId: String): Flow<List<NodeSchedule>> = nodeScheduleDao.getByNodeId(nodeId)
     

@@ -3,6 +3,7 @@ package com.alan.routineos.ui.features.today.components
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.today.state.ResolvedNodeUi
@@ -23,6 +25,7 @@ import com.alan.routineos.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TodayActivityCard(
+    id: String,
     time: String,
     title: String,
     subtitle: String? = null,
@@ -32,10 +35,11 @@ fun TodayActivityCard(
     isCancelled: Boolean = false,
     hasConflict: Boolean = false,
     resolvedNodes: List<ResolvedNodeUi> = emptyList(),
+    onNodeToggle: (String) -> Unit = {},
     onComplete: () -> Unit = {},
     onSkip: () -> Unit = {}
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(true) }
     val dismissState = rememberSwipeToDismissBoxState()
 
     LaunchedEffect(dismissState.currentValue) {
@@ -54,29 +58,21 @@ fun TodayActivityCard(
             .height(IntrinsicSize.Min)
             .alpha(if (isCancelled) 0.4f else 1f)
     ) {
-        // 1. TIMELINE TIME (OPERATIVE STYLE)
+        // 1. TIEMPO
         Column(
             modifier = Modifier
                 .width(64.dp)
                 .padding(top = 16.dp, end = 8.dp),
             horizontalAlignment = Alignment.End
         ) {
-            val parts = time.split(" ")
             Text(
-                text = parts[0],
+                text = time,
                 style = MetaMono.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
                 color = ColorText
             )
-            if (parts.size > 1) {
-                Text(
-                    text = parts[1],
-                    style = MetaMono.copy(fontSize = 8.sp),
-                    color = ColorTextDim
-                )
-            }
         }
 
-        // 2. TIMELINE AXIS
+        // 2. EJE
         Column(
             modifier = Modifier
                 .width(24.dp)
@@ -98,12 +94,12 @@ fun TodayActivityCard(
             )
         }
 
-        // 3. OPERATIVE CONTENT CARD
+        // 3. CONTENIDO
         SwipeToDismissBox(
             state = dismissState,
             backgroundContent = {
                 val direction = dismissState.dismissDirection
-                val color = when (direction) {
+                val bgColor = when (direction) {
                     SwipeToDismissBoxValue.StartToEnd -> Color(0xFF4CAF50)
                     SwipeToDismissBoxValue.EndToStart -> Color(0xFF333333)
                     else -> Color.Transparent
@@ -111,20 +107,17 @@ fun TodayActivityCard(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(color, RoundedCornerShape(12.dp))
+                        .background(bgColor, RoundedCornerShape(12.dp))
                         .padding(horizontal = 16.dp),
                     contentAlignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
                 ) {
                     Icon(
                         if (direction == SwipeToDismissBoxValue.StartToEnd) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = null,
-                        tint = Color.White
+                        null, tint = Color.White
                     )
                 }
             },
-            modifier = Modifier
-                .weight(1f)
-                .padding(bottom = 12.dp, end = 16.dp)
+            modifier = Modifier.weight(1f).padding(bottom = 12.dp, end = 16.dp)
         ) {
             Surface(
                 color = ColorSurface,
@@ -141,85 +134,65 @@ fun TodayActivityCard(
                             modifier = Modifier.weight(1f)
                         )
                         if (resolvedNodes.isNotEmpty()) {
-                            IconButton(
-                                onClick = { expanded = !expanded },
-                                modifier = Modifier.size(24.dp)
-                            ) {
+                            IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(24.dp)) {
                                 Icon(
                                     if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    tint = ColorTextDim,
-                                    modifier = Modifier.size(20.dp)
+                                    null, tint = ColorTextDim, modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
                     }
 
                     if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MetaMono.copy(fontSize = 10.sp),
-                            color = ColorTextDim
-                        )
+                        Text(subtitle, style = MetaMono.copy(fontSize = 10.sp), color = ColorTextDim)
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        // Minimal Status Tag
-                        Surface(
-                            color = statusColor.copy(alpha = 0.12f),
-                            shape = RoundedCornerShape(4.dp)
+                    // DESGLOSE DE BLOQUES INTERNOS
+                    AnimatedVisibility(visible = expanded && resolvedNodes.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.padding(top = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = statusLabel.uppercase(),
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                style = MetaMono.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
-                                color = statusColor
-                            )
-                        }
-
-                        if (hasConflict) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
-                                color = Color(0xFFE65100).copy(alpha = 0.12f),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    "CONFLICT",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                    style = MetaMono.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
-                                    color = Color(0xFFE65100)
-                                )
-                            }
-                        }
-                    }
-
-                    AnimatedVisibility(visible = expanded) {
-                        Column(modifier = Modifier.padding(top = 12.dp)) {
                             resolvedNodes.forEach { node ->
-                                Row(
+                                Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(start = (node.depth * 12).dp, top = 4.dp, bottom = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clickable { onNodeToggle(node.id) }
+                                        .background(if (node.isCompleted) Color.White.copy(alpha = 0.03f) else Color.Transparent, RoundedCornerShape(6.dp))
+                                        .padding(8.dp)
                                 ) {
-                                    val prefix = if (node.depth > 0) "• " else ""
-                                    Text(
-                                        text = "$prefix${node.name}",
-                                        style = TitleNode.copy(
-                                            fontSize = 12.sp,
-                                            fontWeight = if (node.depth == 0) FontWeight.Medium else FontWeight.Normal
-                                        ),
-                                        color = if (node.depth == 0) ColorText else ColorTextDim,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    if (node.valueSummary != null) {
-                                        Text(
-                                            node.valueSummary,
-                                            style = MetaMono.copy(fontSize = 9.sp),
-                                            color = Color(0xFF444444)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (node.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                            null, tint = if (node.isCompleted) ColorExec else ColorTextDim, modifier = Modifier.size(16.dp)
                                         )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text(
+                                            text = node.name,
+                                            modifier = Modifier.weight(1f),
+                                            style = TitleNode.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium, textDecoration = if (node.isCompleted) TextDecoration.LineThrough else null),
+                                            color = if (node.isCompleted) ColorTextDim else ColorText
+                                        )
+                                        if (node.time != null) {
+                                            Text(node.time, style = MetaMono.copy(fontSize = 9.sp), color = ColorExec)
+                                        }
+                                    }
+                                    
+                                    // Metadata del Bloque (Ej: Peso, Reps, Aula)
+                                    if (node.fields.isNotEmpty()) {
+                                        Row(
+                                            modifier = Modifier.padding(top = 6.dp, start = 26.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                                        ) {
+                                            node.fields.forEach { field ->
+                                                Column {
+                                                    Text(field.label.uppercase(), style = MetaMono.copy(fontSize = 7.sp, letterSpacing = 0.5.sp), color = ColorTextDim)
+                                                    Text(field.value, style = MetaMono.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold), color = if (node.isCompleted) ColorTextDim else Color.White)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

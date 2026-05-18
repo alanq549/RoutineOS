@@ -15,62 +15,79 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.template_builder.components.BuilderTextField
 import com.alan.routineos.ui.theme.MetaMono
-
-enum class ActivityType { WORKOUT, TASK, HABIT, EVENT, ROUTINE }
+import com.alan.routineos.ui.theme.ColorTextDim
 
 @Composable
 fun ActivityIdentitySection(
     name: String,
-    onNameChange: (String) -> Unit
+    onNameChange: (String) -> Unit,
+    selectedCategory: ContextCategory,
+    onCategoryChange: (ContextCategory) -> Unit
 ) {
-    var selectedType by remember { mutableStateOf(ActivityType.ROUTINE) }
-
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp)) {
         Text(
-            "IDENTIDAD",
-            style = MetaMono.copy(fontSize = 9.sp),
-            color = Color(0xFF555555)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Name Input - Minimal
-        BuilderTextField(
-            value = name,
-            onValueChange = onNameChange,
-            placeholder = "Nombre de la actividad...",
-            isFocused = true
+            "¿QUÉ VAMOS A ORGANIZAR?",
+            style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+            color = ColorTextDim
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Type Selector - Premium Chips
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ActivityType.entries.forEach { type ->
-                val isSelected = selectedType == type
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(
-                            if (isSelected) Color(0xFF1565C0).copy(alpha = 0.1f) else Color.Transparent,
-                            RoundedCornerShape(6.dp)
+        BuilderTextField(
+            value = name,
+            onValueChange = onNameChange,
+            placeholder = "Ej. Push Day, Semestre 8, Meditación...",
+            isFocused = name.isEmpty()
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        ContextGrid(
+            selected = selectedCategory,
+            onSelected = onCategoryChange
+        )
+    }
+}
+
+@Composable
+private fun ContextGrid(
+    selected: ContextCategory,
+    onSelected: (ContextCategory) -> Unit
+) {
+    val rows = ContextCategory.entries.chunked(3)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                row.forEach { category ->
+                    val isSelected = selected == category
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (isSelected) Color(0xFF1E1E1E) else Color.Transparent,
+                                RoundedCornerShape(8.dp)
+                            )
+                            .border(
+                                0.5.dp,
+                                if (isSelected) Color(0xFF444444) else Color(0xFF222222),
+                                RoundedCornerShape(8.dp)
+                            )
+                            .clickable { onSelected(category) }
+                            .padding(vertical = 10.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = category.label,
+                            style = MetaMono.copy(
+                                fontSize = 9.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (isSelected) Color.White else Color(0xFF666666)
                         )
-                        .border(
-                            0.5.dp,
-                            if (isSelected) Color(0xFF1565C0) else Color(0xFF2A2A2A),
-                            RoundedCornerShape(6.dp)
-                        )
-                        .clickable { selectedType = type }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = type.name,
-                        style = MetaMono.copy(fontSize = 8.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal),
-                        color = if (isSelected) Color(0xFF42A5F5) else Color(0xFF555555)
-                    )
+                    }
                 }
             }
         }

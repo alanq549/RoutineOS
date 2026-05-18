@@ -5,5 +5,6 @@ import com.alan.routineos.data.remote.auth.device.DeviceRequest
 data class LoginRequest(
     val email: String,
     val password: String,
+    val timezone: String?,
     val device: DeviceRequest
 )

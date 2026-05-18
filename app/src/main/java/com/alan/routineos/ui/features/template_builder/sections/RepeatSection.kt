@@ -15,40 +15,45 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.ColorExec
 
 @Composable
-fun RepeatSection() {
+fun RepeatSection(
+    selectedDays: Set<Int>,
+    onToggleDay: (Int) -> Unit
+) {
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
         Text(
-            "REPETICIÓN",
-            style = MetaMono.copy(fontSize = 9.sp),
-            color = Color(0xFF555555)
+            "¿QUÉ DÍAS SE REPITE?",
+            style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+            color = ColorTextDim
         )
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val days = listOf("L", "M", "M", "J", "V", "S", "D")
-            var selectedDays by remember { mutableStateOf(setOf<Int>()) }
 
             days.forEachIndexed { index, day ->
-                val isSelected = selectedDays.contains(index + 1)
+                val dayValue = index + 1
+                val isSelected = selectedDays.contains(dayValue)
                 Box(
                     modifier = Modifier
-                        .size(38.dp)
+                        .weight(1f)
+                        .aspectRatio(1f)
                         .background(
-                            if (isSelected) Color(0xFF1565C0) else Color(0xFF1A1A1A),
+                            if (isSelected) ColorExec.copy(alpha = 0.1f) else Color(0xFF1A1A1A),
                             RoundedCornerShape(8.dp)
                         )
                         .border(
                             0.5.dp,
-                            if (isSelected) Color(0xFF42A5F5) else Color(0xFF2A2A2A),
+                            if (isSelected) ColorExec else Color(0xFF2A2A2A),
                             RoundedCornerShape(8.dp)
                         )
                         .clickable {
-                            selectedDays =
-                                if (isSelected) selectedDays - (index + 1) else selectedDays + (index + 1)
+                            onToggleDay(dayValue)
                         },
                     contentAlignment = Alignment.Center
                 ) {
@@ -56,7 +61,7 @@ fun RepeatSection() {
                         day,
                         style = TitleNode.copy(
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                         ),
                         color = if (isSelected) Color.White else Color(0xFF777777)
                     )

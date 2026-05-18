@@ -1,42 +1,86 @@
 package com.alan.routineos.ui.features.system.components
 
-import androidx.compose.animation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AutoMode
+import androidx.compose.material.icons.filled.BeachAccess
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Celebration
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EditAttributes
+import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Sick
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.alan.routineos.ui.features.node_type_manager.components.schema.ManagerTextField
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.ColorTextMuted
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.TitleNode
 
 /**
  * REDESIGNED SYSTEM COMPONENTS — INTENTION-FIRST UX
  * A single reactive sheet replaces the multi-step wizard.
- * Focused on human intention, calm tech, and progressive disclosure.
  */
 
 enum class AdjustmentType { CANCEL_DAY, VACATION, RESCHEDULE }
 
-// --- Intentions (What's happening?) ---
 enum class AdjustmentIntention(val label: String, val icon: ImageVector) {
     VACATION("Vacaciones", Icons.Default.BeachAccess),
     DAY_OFF("Día libre", Icons.Default.Nightlight),
@@ -46,12 +90,11 @@ enum class AdjustmentIntention(val label: String, val icon: ImageVector) {
     CUSTOM("Otro", Icons.Default.Tune)
 }
 
-// --- Strategies (How to handle it?) ---
 enum class AdjustmentStrategy(val label: String, val description: String, val icon: ImageVector) {
     PAUSE_ALL("Pausar todo", "Nada se genera estos días", Icons.Default.PauseCircle),
     KEEP_IMPORTANT("Solo importante", "Se mantiene lo crítico", Icons.Default.PriorityHigh),
-    AUTO_RESCHEDULE("Reacomodar", "El sistema busca huecos", Icons.Default.AutoMode),
-    MANUAL("Elegir manualmente", "Configura cada actividad", Icons.Default.EditAttributes)
+    AUTO_RESCHEDULE("Reacomodar", "El sistema ajusta los horarios", Icons.Default.AutoMode),
+    MANUAL("Elegir manualmente", "Configura actividad por actividad", Icons.Default.EditAttributes)
 }
 
 @Composable
@@ -137,7 +180,6 @@ fun NewAdjustmentSheet(
     var intention by remember { mutableStateOf<AdjustmentIntention?>(null) }
     var strategy by remember { mutableStateOf(AdjustmentStrategy.PAUSE_ALL) }
     var isRange by remember { mutableStateOf(false) }
-    var note by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -156,7 +198,7 @@ fun NewAdjustmentSheet(
                 style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
                 color = ColorText
             )
-            
+
             Spacer(modifier = Modifier.height(20.dp))
 
             // 1. Intention Grid
@@ -182,15 +224,15 @@ fun NewAdjustmentSheet(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(32.dp))
-                    
-                    // 2. Human Date Selection
+
+                    // 2. Dates
                     Text(
                         text = "¿Cuándo ocurre?",
                         style = TitleNode.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         color = ColorText
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -198,27 +240,22 @@ fun NewAdjustmentSheet(
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        DateModeButton("Solo un día", !isRange, Modifier.weight(1f)) { isRange = false }
-                        DateModeButton("Varios días", isRange, Modifier.weight(1f)) { isRange = true }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    if (!isRange) {
-                        DatePickerTrigger("Lunes, 12 de mayo")
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            DatePickerTrigger("19 mayo", Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Filled.ArrowForward, null, Modifier.padding(horizontal = 8.dp).size(16.dp), tint = ColorTextMuted)
-                            DatePickerTrigger("23 mayo", Modifier.weight(1f))
+                        DateModeButton("Solo un día", !isRange, Modifier.weight(1f)) {
+                            isRange = false
+                        }
+                        DateModeButton("Varios días", isRange, Modifier.weight(1f)) {
+                            isRange = true
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(12.dp))
+                    DatePickerTrigger(if (isRange) "19 - 23 de mayo" else "Lunes, 12 de mayo")
+
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // 3. Simple Strategy Selector
+                    // 3. Strategy Selector
                     Text(
-                        text = "¿Cómo manejamos tu rutina?",
+                        text = "¿Cómo quieres manejar esos días?",
                         style = TitleNode.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         color = ColorText
                     )
@@ -229,34 +266,32 @@ fun NewAdjustmentSheet(
                         StrategyOption(item, isSelected) { strategy = item }
                     }
 
-                    // 4. Advanced disclosure
+                    // 4. Advanced Options (Disclosure)
                     AnimatedVisibility(visible = strategy == AdjustmentStrategy.MANUAL) {
                         Column(modifier = Modifier.padding(top = 16.dp)) {
-                            Text("AJUSTES GRANULARES", style = MetaMono, color = ColorTextMuted)
+                            Text(
+                                "CONFIGURACIÓN POR ACTIVIDAD",
+                                style = MetaMono,
+                                color = ColorTextMuted
+                            )
                             Spacer(modifier = Modifier.height(12.dp))
-                            ManualActivityRow("Semestre 8", "07:00 AM")
-                            ManualActivityRow("Push Day", "04:00 PM")
+                            ManualActivityRow("Semestre 8")
+                            ManualActivityRow("Push Day")
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    ManagerTextField(
-                        value = note,
-                        onValueChange = { note = it },
-                        placeholder = "Razón o nota (opcional)"
-                    )
-
                     Spacer(modifier = Modifier.height(32.dp))
 
-                    // 5. REACTIVE PREVIEW
-                    ReactivePreviewSection(strategy)
+                    // 5. Reactive Preview
+                    ReactivePreviewBox(strategy)
 
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Button(
                         onClick = { onConfirm(intention?.label ?: "Ajuste") },
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -278,22 +313,25 @@ private fun IntentionChip(
         modifier = Modifier.clickable { onClick() },
         color = if (isSelected) ColorExec.copy(alpha = 0.1f) else ColorSurface,
         shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isSelected) ColorExec else ColorBorder)
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (isSelected) ColorExec else ColorBorder
+        )
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = item.icon, 
-                contentDescription = null, 
-                modifier = Modifier.size(16.dp), 
+                imageVector = item.icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
                 tint = if (isSelected) ColorExec else ColorTextDim
             )
             Spacer(Modifier.width(8.dp))
             Text(
-                text = item.label, 
-                style = TitleNode.copy(fontSize = 13.sp), 
+                text = item.label,
+                style = TitleNode.copy(fontSize = 13.sp),
                 color = if (isSelected) ColorText else ColorTextDim
             )
         }
@@ -301,7 +339,12 @@ private fun IntentionChip(
 }
 
 @Composable
-private fun DateModeButton(label: String, isSelected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun DateModeButton(
+    label: String,
+    isSelected: Boolean,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
@@ -310,17 +353,24 @@ private fun DateModeButton(label: String, isSelected: Boolean, modifier: Modifie
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, style = TitleNode.copy(fontSize = 12.sp, fontWeight = if(isSelected) FontWeight.Bold else FontWeight.Normal), color = if (isSelected) ColorText else ColorTextDim)
+        Text(
+            label,
+            style = TitleNode.copy(
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            ),
+            color = if (isSelected) ColorText else ColorTextDim
+        )
     }
 }
 
 @Composable
-private fun DatePickerTrigger(value: String, modifier: Modifier = Modifier) {
+private fun DatePickerTrigger(value: String) {
     Surface(
-        modifier = modifier,
         color = ColorSurface,
         shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.padding(12.dp),
@@ -342,7 +392,10 @@ private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClic
             .clickable { onClick() },
         color = if (isSelected) ColorExec.copy(alpha = 0.05f) else Color.Transparent,
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isSelected) ColorExec else ColorBorder)
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            if (isSelected) ColorExec else ColorBorder
+        )
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -357,13 +410,13 @@ private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClic
             Spacer(Modifier.width(16.dp))
             Column {
                 Text(
-                    text = item.label, 
-                    style = TitleNode.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold), 
+                    text = item.label,
+                    style = TitleNode.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold),
                     color = if (isSelected) ColorText else ColorTextDim
                 )
                 Text(
-                    text = item.description, 
-                    style = MetaMono.copy(fontSize = 10.sp), 
+                    text = item.description,
+                    style = MetaMono.copy(fontSize = 10.sp),
                     color = ColorTextMuted
                 )
             }
@@ -372,8 +425,8 @@ private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClic
 }
 
 @Composable
-private fun ManualActivityRow(name: String, time: String) {
-    var selectedAction by remember { mutableIntStateOf(2) } // 0: Pause, 1: Move, 2: Keep
+private fun ManualActivityRow(name: String) {
+    var selectedAction by remember { mutableIntStateOf(2) } // 0: Cancel, 1: Move, 2: Keep
 
     Row(
         modifier = Modifier
@@ -382,13 +435,12 @@ private fun ManualActivityRow(name: String, time: String) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(name, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
-            Text(time, style = MetaMono.copy(fontSize = 9.sp), color = ColorTextMuted)
-        }
-        
+        Text(name, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
+
         Row(
-            modifier = Modifier.background(ColorSurface, RoundedCornerShape(8.dp)).padding(2.dp),
+            modifier = Modifier
+                .background(ColorSurface, RoundedCornerShape(8.dp))
+                .padding(2.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             ActionToggleIcon(Icons.Default.Pause, selectedAction == 0) { selectedAction = 0 }
@@ -409,9 +461,9 @@ private fun ActionToggleIcon(icon: ImageVector, isSelected: Boolean, onClick: ()
     ) {
         Box(contentAlignment = Alignment.Center) {
             Icon(
-                imageVector = icon, 
-                contentDescription = null, 
-                modifier = Modifier.size(16.dp), 
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
                 tint = if (isSelected) ColorExec else ColorTextMuted
             )
         }
@@ -419,30 +471,32 @@ private fun ActionToggleIcon(icon: ImageVector, isSelected: Boolean, onClick: ()
 }
 
 @Composable
-private fun ReactivePreviewSection(strategy: AdjustmentStrategy) {
+private fun ReactivePreviewBox(strategy: AdjustmentStrategy) {
     Surface(
         color = ColorSurface.copy(alpha = 0.5f),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text("VISTA PREVIA", style = MetaMono.copy(fontSize = 8.sp, letterSpacing = 1.sp), color = ColorTextMuted)
+            Text(
+                "ESTO PASARÁ:",
+                style = MetaMono.copy(letterSpacing = 1.sp),
+                color = ColorTextMuted
+            )
             Spacer(modifier = Modifier.height(12.dp))
-            
-            val lines = when(strategy) {
-                AdjustmentStrategy.PAUSE_ALL -> listOf("• Todas las actividades pausadas")
-                AdjustmentStrategy.KEEP_IMPORTANT -> listOf("• Rutinas críticas activas", "• Actividades secundarias pausadas")
-                AdjustmentStrategy.AUTO_RESCHEDULE -> listOf("• El sistema re-calcula tu tiempo", "• Horarios movidos automáticamente")
-                AdjustmentStrategy.MANUAL -> listOf("• Cambios aplicados según tu selección")
+
+            val text = when (strategy) {
+                AdjustmentStrategy.PAUSE_ALL -> "• Todas las actividades pausadas\n• Tu racha se mantendrá congelada"
+                AdjustmentStrategy.KEEP_IMPORTANT -> "• Rutinas críticas permanecen activas\n• El resto no se generará"
+                AdjustmentStrategy.AUTO_RESCHEDULE -> "• El sistema buscará nuevos horarios\n• Se optimizarán los espacios vacíos"
+                AdjustmentStrategy.MANUAL -> "• Cambios personalizados según tu selección"
             }
-            
-            lines.forEach { line ->
-                Text(
-                    text = line,
-                    style = TitleNode.copy(fontSize = 12.sp, lineHeight = 18.sp),
-                    color = ColorTextDim
-                )
-            }
+
+            Text(
+                text = text,
+                style = TitleNode.copy(fontSize = 12.sp, lineHeight = 18.sp),
+                color = ColorTextDim
+            )
         }
     }
 }

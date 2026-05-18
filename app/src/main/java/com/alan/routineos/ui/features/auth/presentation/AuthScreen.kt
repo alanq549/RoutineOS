@@ -1,6 +1,5 @@
 package com.alan.routineos.ui.features.auth.presentation
 
-import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.fadeIn
@@ -8,27 +7,47 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.alan.routineos.data.remote.auth.DevicePlatform
-import com.alan.routineos.data.remote.auth.device.DeviceRequest
-import com.alan.routineos.data.remote.auth.login.LoginRequest
-import com.alan.routineos.data.remote.auth.register.RegisterRequest
 import com.alan.routineos.ui.components.RoutineErrorCard
 import com.alan.routineos.ui.components.RoutineTextField
 import com.alan.routineos.ui.features.auth.state.AuthState
 import com.alan.routineos.ui.features.auth.state.AuthStep
 import com.alan.routineos.ui.features.auth.state.VerifyEmailState
 import com.alan.routineos.ui.features.auth.viewmodel.AuthViewModel
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.MetaMono
 
 /**
  * AUTH SCREEN: Premium Minimal / Calm Tech
@@ -41,9 +60,6 @@ fun AuthScreen(
     onLoginSuccess: () -> Unit
 ) {
     var step by remember { mutableStateOf(AuthStep.LOGIN) }
-
-    val deviceName = "${Build.MANUFACTURER} ${Build.MODEL}"
-    val platform = DevicePlatform.ANDROID
 
     // LOGIN
     var loginEmail by remember { mutableStateOf("") }
@@ -82,9 +98,11 @@ fun AuthScreen(
                 pendingEmail = (authState as AuthState.EmailNotVerified).email
                 step = AuthStep.VERIFY
             }
+
             is AuthState.Authenticated -> {
                 onLoginSuccess()
             }
+
             else -> Unit
         }
     }
@@ -118,7 +136,7 @@ fun AuthScreen(
                 ),
                 color = ColorText
             )
-            
+
             Text(
                 text = when (step) {
                     AuthStep.LOGIN -> "Inicia sesión para continuar"
@@ -160,20 +178,11 @@ fun AuthScreen(
                                     isLoading = authState is AuthState.Loading,
                                     enabled = loginEnabled,
                                     onLogin = {
-                                        viewModel.login(
-                                            LoginRequest(
-                                                email = loginEmail,
-                                                password = loginPassword,
-                                                device = DeviceRequest(
-                                                    platform = platform,
-                                                    deviceName = deviceName,
-                                                    deviceFingerprint = "routine_auth_fprint_001"
-                                                )
-                                            )
-                                        )
+                                        viewModel.login(loginEmail, loginPassword)
                                     }
                                 )
                             }
+
                             AuthStep.REGISTER -> {
                                 RegisterStep(
                                     name = name,
@@ -186,17 +195,9 @@ fun AuthScreen(
                                     enabled = registerEnabled,
                                     onRegister = {
                                         viewModel.register(
-                                            request = RegisterRequest(
-                                                email = registerEmail,
-                                                password = registerPassword,
-                                                name = name,
-                                                timezone = null,
-                                                device = DeviceRequest(
-                                                    platform = platform,
-                                                    deviceName = deviceName,
-                                                    deviceFingerprint = "routine_auth_fprint_001"
-                                                )
-                                            ),
+                                            name = name,
+                                            email = registerEmail,
+                                            password = registerPassword,
                                             onCodeSent = {
                                                 pendingEmail = registerEmail
                                                 step = AuthStep.VERIFY
@@ -205,6 +206,7 @@ fun AuthScreen(
                                     }
                                 )
                             }
+
                             AuthStep.VERIFY -> {
                                 VerifyStep(
                                     email = pendingEmail,
@@ -271,7 +273,9 @@ private fun LoginStep(
         Button(
             onClick = onLogin,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -283,7 +287,7 @@ private fun LoginStep(
                 )
             } else {
                 Text(
-                    text = "Iniciar sesión", 
+                    text = "Iniciar sesión",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }
@@ -333,12 +337,14 @@ private fun RegisterStep(
         Button(
             onClick = onRegister,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(
-                text = "Crear cuenta", 
+                text = "Crear cuenta",
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
             )
         }
@@ -359,9 +365,9 @@ private fun VerifyStep(
         Column {
             Text(text = "Enviamos un código a:", style = MetaMono, color = ColorTextDim)
             Text(
-                text = email, 
-                style = MaterialTheme.typography.bodyLarge, 
-                color = ColorText, 
+                text = email,
+                style = MaterialTheme.typography.bodyLarge,
+                color = ColorText,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -380,7 +386,9 @@ private fun VerifyStep(
         Button(
             onClick = onVerify,
             enabled = enabled,
-            modifier = Modifier.fillMaxWidth().height(52.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
             shape = RoundedCornerShape(12.dp)
         ) {
@@ -392,7 +400,7 @@ private fun VerifyStep(
                 )
             } else {
                 Text(
-                    text = "Verificar cuenta", 
+                    text = "Verificar cuenta",
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
             }

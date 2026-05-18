@@ -21,7 +21,7 @@ import com.alan.routineos.data.local.entities.*
         ScheduleException::class,
         NodeSchedule::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

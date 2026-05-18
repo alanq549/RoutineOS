@@ -6,8 +6,14 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FieldValueDao {
+    @Query("SELECT * FROM node_field_values")
+    fun getAll(): Flow<List<NodeFieldValue>>
+
     @Query("SELECT * FROM node_field_values WHERE nodeId = :nodeId")
     fun getByNode(nodeId: String): Flow<List<NodeFieldValue>>
+
+    @Query("SELECT * FROM node_field_values WHERE nodeId IN (:nodeIds)")
+    fun getByNodes(nodeIds: List<String>): Flow<List<NodeFieldValue>>
 
     @Query("SELECT * FROM node_field_values WHERE nodeId = :nodeId AND fieldName = :fieldName LIMIT 1")
     suspend fun getByNodeAndField(nodeId: String, fieldName: String): NodeFieldValue?

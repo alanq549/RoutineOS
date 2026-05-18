@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.template_builder.sections
 
+import android.app.TimePickerDialog
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,27 +15,44 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
-
-enum class TimeMode { FIXED_START, RANGE, DURATION, FLEXIBLE }
+import com.alan.routineos.ui.theme.ColorTextDim
+import java.util.Locale
 
 @Composable
-fun TimeRangeSection() {
-    var selectedMode by remember { mutableStateOf(TimeMode.RANGE) }
+fun TimeRangeSection(
+    selectedMode: TimeMode,
+    startTime: String,
+    endTime: String,
+    onModeChange: (TimeMode) -> Unit,
+    onStartTimeChange: (String) -> Unit,
+    onEndTimeChange: (String) -> Unit
+) {
+    val context = LocalContext.current
+
+    fun showPicker(currentTime: String, onTimeSelected: (String) -> Unit) {
+        val parts = currentTime.split(":")
+        val hour = parts.getOrNull(0)?.toIntOrNull() ?: 8
+        val minute = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        
+        TimePickerDialog(context, { _, h, m ->
+            onTimeSelected(String.format(Locale.US, "%02d:%02d", h, m))
+        }, hour, minute, true).show()
+    }
 
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp)) {
         Text(
-            "PLANIFICACIÓN TEMPORAL",
-            style = MetaMono.copy(fontSize = 9.sp),
-            color = Color(0xFF555555)
+            "¿CUÁNDO OCURRE?",
+            style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+            color = ColorTextDim
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Mode Selector - Segmented Control Style
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -51,7 +69,7 @@ fun TimeRangeSection() {
                             if (isSelected) Color(0xFF2A2A2A) else Color.Transparent,
                             RoundedCornerShape(6.dp)
                         )
-                        .clickable { selectedMode = mode }
+                        .clickable { onModeChange(mode) }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -71,11 +89,14 @@ fun TimeRangeSection() {
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Time Values - Futuristic Layout
         AnimatedContent(targetState = selectedMode, label = "time_content") { mode ->
             when (mode) {
                 TimeMode.FIXED_START -> {
-                    TimeValueDisplay(label = "INICIO", value = "08:00 AM")
+                    TimeValueDisplay(
+                        label = "INICIA A LAS", 
+                        value = startTime,
+                        onClick = { showPicker(startTime, onStartTimeChange) }
+                    )
                 }
                 TimeMode.RANGE -> {
                     Row(
@@ -83,14 +104,24 @@ fun TimeRangeSection() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TimeValueDisplay(label = "DESDE", value = "08:00 AM", modifier = Modifier.weight(1f))
+                        TimeValueDisplay(
+                            label = "DESDE LAS", 
+                            value = startTime, 
+                            modifier = Modifier.weight(1f),
+                            onClick = { showPicker(startTime, onStartTimeChange) }
+                        )
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowForward,
                             contentDescription = null,
                             tint = Color(0xFF2A2A2A),
                             modifier = Modifier.padding(horizontal = 16.dp).size(16.dp)
                         )
-                        TimeValueDisplay(label = "HASTA", value = "10:00 AM", modifier = Modifier.weight(1f))
+                        TimeValueDisplay(
+                            label = "HASTA LAS", 
+                            value = endTime, 
+                            modifier = Modifier.weight(1f),
+                            onClick = { showPicker(endTime, onEndTimeChange) }
+                        )
                     }
                 }
                 TimeMode.DURATION -> {
@@ -98,9 +129,19 @@ fun TimeRangeSection() {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TimeValueDisplay(label = "INICIO", value = "08:00 AM", modifier = Modifier.weight(1f))
+                        TimeValueDisplay(
+                            label = "INICIA A LAS", 
+                            value = startTime, 
+                            modifier = Modifier.weight(1f),
+                            onClick = { showPicker(startTime, onStartTimeChange) }
+                        )
                         Spacer(modifier = Modifier.width(16.dp))
-                        TimeValueDisplay(label = "DURACIÓN", value = "2h 30m", modifier = Modifier.weight(1f))
+                        TimeValueDisplay(
+                            label = "TIENE UNA DURACIÓN DE", 
+                            value = "1h", 
+                            modifier = Modifier.weight(1f),
+                            onClick = { /* Implementar duración si es necesario */ }
+                        )
                     }
                 }
                 TimeMode.FLEXIBLE -> {
@@ -124,21 +165,26 @@ fun TimeRangeSection() {
 }
 
 @Composable
-fun TimeValueDisplay(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        Text(label, style = MetaMono.copy(fontSize = 8.sp), color = Color(0xFF444444))
-        Spacer(modifier = Modifier.height(4.dp))
+fun TimeValueDisplay(
+    label: String, 
+    value: String, 
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit = {}
+) {
+    Column(modifier = modifier.clickable { onClick() }) {
+        Text(label, style = MetaMono.copy(fontSize = 8.sp), color = ColorTextDim)
+        Spacer(modifier = Modifier.height(6.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
                 .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
             Text(
                 value,
                 style = TitleNode.copy(fontSize = 16.sp, letterSpacing = 1.sp),
-                color = Color(0xFFE0E0E0)
+                color = Color.White
             )
         }
     }

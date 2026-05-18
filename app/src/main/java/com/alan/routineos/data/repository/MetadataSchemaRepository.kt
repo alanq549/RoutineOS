@@ -10,6 +10,8 @@ import javax.inject.Singleton
 class MetadataSchemaRepository @Inject constructor(
     private val metadataSchemaDao: MetadataSchemaDao
 ) {
+    fun getAll(): Flow<List<NodeMetadataSchema>> = metadataSchemaDao.getAll()
+
     fun getByTypeId(typeId: String): Flow<List<NodeMetadataSchema>> = 
         metadataSchemaDao.getByTypeId(typeId)
 

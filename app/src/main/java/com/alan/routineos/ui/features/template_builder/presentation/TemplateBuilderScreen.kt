@@ -7,9 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,17 +17,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.Node
-import com.alan.routineos.ui.features.template_builder.components.MetadataFieldItem
 import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSheet
-import com.alan.routineos.ui.features.template_builder.components.SectionHeader
 import com.alan.routineos.ui.features.template_builder.sections.*
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
 import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorSurface
 
-/**
- * UI REFACTOR: Template Builder Screen
- * Focused on a temporal-first workflow (Routine Composer).
- */
 @Composable
 fun TemplateBuilderScreen(
     onBack: () -> Unit,
@@ -36,7 +33,8 @@ fun TemplateBuilderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedNodeForSchedule by remember { mutableStateOf<Node?>(null) }
-    
+    var showStructure by remember { mutableStateOf(false) } 
+
     val colors = listOf(
         Color(0xFFF44336), Color(0xFFFF9800), Color(0xFFFFC107),
         Color(0xFF4CAF50), Color(0xFF2196F3), Color(0xFF9C27B0),
@@ -49,48 +47,101 @@ fun TemplateBuilderScreen(
                 isNewTemplate = uiState.templateId == null,
                 canSave = uiState.name.isNotBlank(),
                 onBack = onBack,
-                onSave = viewModel::saveTemplate
+                onSave = {
+                    viewModel.saveTemplate()
+                    onBack()
+                }
             )
         },
-        containerColor = Color(0xFF0D1117)
+        containerColor = ColorBg
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // 1. IDENTITY: Name + Activity Type
+            // 1. IDENTITY: ¿Qué vamos a organizar?
             item {
                 ActivityIdentitySection(
                     name = uiState.name,
-                    onNameChange = viewModel::updateName
+                    onNameChange = viewModel::updateName,
+                    selectedCategory = uiState.category,
+                    onCategoryChange = viewModel::updateCategory
                 )
             }
 
-            // 2. TEMPORAL PLANNING: Time Mode Selector
-            item {
-                TimeRangeSection()
+            // 0. QUICK START (Presets)
+            if (uiState.templateId == null && uiState.name.isBlank()) {
+                item {
+                    QuickPresetsSection(onSelect = { preset ->
+                        viewModel.updateName(preset.name)
+                        viewModel.updateColor(preset.colorHex)
+                        viewModel.updateCategory(preset.category)
+                    })
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
             }
 
-            // 3. RECURRENCE: Weekly Pattern
+            // 2. TEMPORAL: ¿CUÁNDO OCURRE?
             item {
-                RepeatSection()
+                TimeRangeSection(
+                    selectedMode = uiState.timeMode,
+                    startTime = uiState.startTime,
+                    endTime = uiState.endTime,
+                    onModeChange = viewModel::updateTimeMode,
+                    onStartTimeChange = viewModel::updateStartTime,
+                    onEndTimeChange = viewModel::updateEndTime
+                )
             }
 
-            // 4. ROUTINE COMPOSITION: Internal Structure
-            nodeStructureSection(
-                nodes = uiState.nodes,
-                nodeSchedules = uiState.nodeSchedules,
-                onAddNode = { parentId -> 
-                    viewModel.addNode("Nuevo Nodo", "default_type", parentId) 
-                },
-                onDeleteNode = viewModel::deleteNode,
-                onScheduleClick = { selectedNodeForSchedule = it }
-            )
-
-            // 5. ADVANCED CONFIG: Collapsible Panel (Color + Metadata)
+            // 3. RECURRENCE: ¿QUÉ DÍAS SE REPITE?
             item {
-                AdvancedSection {
+                RepeatSection(
+                    selectedDays = uiState.selectedDays,
+                    onToggleDay = viewModel::toggleDay
+                )
+            }
+
+            // 4. ESTRUCTURA INTERNA
+            if (!showStructure && uiState.nodes.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clickable { showStructure = true }
+                            .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            "¿DIVIDIR EN BLOQUES O PASOS?",
+                            style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
+                            color = ColorExec
+                        )
+                    }
+                }
+            } else {
+                nodeStructureSection(
+                    nodes = uiState.nodes,
+                    nodeSchedules = uiState.nodeSchedules,
+                    fieldValues = uiState.fieldValues,
+                    nodeTypes = uiState.nodeTypes,
+                    metadataSchemas = uiState.metadataSchemas,
+                    onAddNode = { parentId -> 
+                        viewModel.addNode("", "default", parentId) 
+                    },
+                    onUpdateNodeName = viewModel::updateNodeName,
+                    onUpdateNodeType = viewModel::updateNodeType,
+                    onUpdateFieldValue = viewModel::updateFieldValue,
+                    onDeleteNode = viewModel::deleteNode,
+                    onScheduleClick = { selectedNodeForSchedule = it }
+                )
+            }
+
+            // 5. APARIENCIA
+            item {
+                AdvancedSection(title = "APARIENCIA Y DETALLES") {
                     Column(modifier = Modifier.padding(bottom = 24.dp)) {
                         ColorSection(
                             selectedColorHex = uiState.colorHex,
@@ -99,10 +150,22 @@ fun TemplateBuilderScreen(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        SectionHeader(title = "Campos personalizados", onAdd = onNavigateToTypeManager)
-                        MetadataFieldItem(type = "NUM", name = "series", value = "def: 4")
-                        MetadataFieldItem(type = "NUM", name = "reps", value = "def: 8")
-                        MetadataFieldItem(type = "NUM", name = "peso", value = "unidad: kg")
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp)
+                                .clickable { onNavigateToTypeManager() }
+                                .background(ColorSurface, RoundedCornerShape(8.dp))
+                                .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "GESTIONAR MOLDES DE DATOS",
+                                style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
+                                color = ColorExec
+                            )
+                        }
                     }
                 }
             }
@@ -147,7 +210,7 @@ private fun TemplateBuilderTopBar(
         Box(
             modifier = Modifier
                 .size(32.dp)
-                .background(Color(0xFF1A1A1A), CircleShape)
+                .background(ColorSurface, CircleShape)
                 .border(0.5.dp, Color(0xFF2A2A2A), CircleShape)
                 .clickable { onBack() },
             contentAlignment = Alignment.Center
@@ -161,21 +224,21 @@ private fun TemplateBuilderTopBar(
         }
         
         Text(
-            text = if (isNewTemplate) "COMPOSER" else "EDITOR",
-            style = TitleNode.copy(fontSize = 12.sp, letterSpacing = 0.1.sp),
-            color = Color(0xFFE0E0E0)
+            text = if (isNewTemplate) "NUEVA ACTIVIDAD" else "EDITAR ACTIVIDAD",
+            style = TitleNode.copy(fontSize = 11.sp, letterSpacing = 1.2.sp),
+            color = Color.White
         )
         
         Surface(
             onClick = onSave,
-            color = if (canSave) Color(0xFF1565C0) else Color(0xFF1A1A1A),
+            color = if (canSave) ColorExec else Color(0xFF1A1A1A),
             shape = RoundedCornerShape(6.dp),
             enabled = canSave
         ) {
             Text(
-                "SAVE",
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
-                style = TitleNode.copy(fontSize = 11.sp),
+                "LISTO",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                style = TitleNode.copy(fontSize = 10.sp),
                 color = if (canSave) Color.White else Color(0xFF444444)
             )
         }
