@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.today.components
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +37,7 @@ fun TodayActivityCard(
     hasConflict: Boolean = false,
     resolvedNodes: List<ResolvedNodeUi> = emptyList(),
     onNodeToggle: (String) -> Unit = {},
+    onNodeClick: (String) -> Unit = {},
     onComplete: () -> Unit = {},
     onSkip: () -> Unit = {}
 ) {
@@ -122,17 +124,41 @@ fun TodayActivityCard(
             Surface(
                 color = ColorSurface,
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNodeClick(id) },
                 border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (hasConflict) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Conflict",
+                                tint = Color.Yellow,
+                                modifier = Modifier.size(16.dp).padding(end = 6.dp)
+                            )
+                        }
                         Text(
                             text = title,
                             style = TitleNode.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold),
                             color = ColorText,
                             modifier = Modifier.weight(1f)
                         )
+                        
+                        Surface(
+                            color = statusColor.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Text(
+                                text = statusLabel.uppercase(),
+                                style = MetaMono.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
+                                color = statusColor,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+
                         if (resolvedNodes.isNotEmpty()) {
                             IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(24.dp)) {
                                 Icon(
@@ -159,14 +185,22 @@ fun TodayActivityCard(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable { onNodeToggle(node.id) }
+                                        .padding(start = ((node.depth - 1) * 12).dp)
                                         .background(if (node.isCompleted) Color.White.copy(alpha = 0.03f) else Color.Transparent, RoundedCornerShape(6.dp))
+                                        .clickable(enabled = node.fields.isNotEmpty()) {
+                                            Log.d("TODAY_DEBUG", "TODAY OPEN EXECUTE nodeId=${node.id} name=${node.name} depth=${node.depth}")
+                                            onNodeClick(node.id)
+                                        }
                                         .padding(8.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
                                             if (node.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                                            null, tint = if (node.isCompleted) ColorExec else ColorTextDim, modifier = Modifier.size(16.dp)
+                                            null, 
+                                            tint = if (node.isCompleted) ColorExec else ColorTextDim, 
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clickable { onNodeToggle(node.id) }
                                         )
                                         Spacer(modifier = Modifier.width(10.dp))
                                         Text(
@@ -175,12 +209,11 @@ fun TodayActivityCard(
                                             style = TitleNode.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium, textDecoration = if (node.isCompleted) TextDecoration.LineThrough else null),
                                             color = if (node.isCompleted) ColorTextDim else ColorText
                                         )
-                                        if (node.time != null) {
-                                            Text(node.time, style = MetaMono.copy(fontSize = 9.sp), color = ColorExec)
+                                        if (node.timeLabel != null) {
+                                            Text(node.timeLabel, style = MetaMono.copy(fontSize = 9.sp), color = ColorExec)
                                         }
                                     }
                                     
-                                    // Metadata del Bloque (Ej: Peso, Reps, Aula)
                                     if (node.fields.isNotEmpty()) {
                                         Row(
                                             modifier = Modifier.padding(top = 6.dp, start = 26.dp),

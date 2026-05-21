@@ -1,10 +1,7 @@
 package com.alan.routineos.ui.features.today.state
 
 import androidx.compose.ui.graphics.Color
-import com.alan.routineos.data.local.entities.DayInstance
 import com.alan.routineos.data.local.entities.FieldType
-import com.alan.routineos.data.local.entities.Node
-import com.alan.routineos.data.local.entities.NodeType
 
 data class TodayUiState(
     val isLoading: Boolean = true,
@@ -26,6 +23,7 @@ data class TimelineEntryUi(
     val barColor: Color,
     val isCancelled: Boolean = false,
     val hasConflict: Boolean = false,
+    val fields: List<ResolvedFieldUi> = emptyList(),
     val resolvedNodes: List<ResolvedNodeUi> = emptyList(),
     val showTimeIndicatorBefore: Boolean = false
 )
@@ -34,7 +32,7 @@ data class ResolvedNodeUi(
     val id: String,
     val name: String,
     val depth: Int,
-    val time: String? = null, // Horario específico del bloque
+    val timeLabel: String? = null, // "09:00 - 09:20" o "09:00"
     val isCompleted: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList()
 )

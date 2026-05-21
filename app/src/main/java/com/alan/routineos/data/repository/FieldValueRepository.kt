@@ -14,10 +14,20 @@ class FieldValueRepository @Inject constructor(
 
     fun getByNode(nodeId: String): Flow<List<NodeFieldValue>> = fieldValueDao.getByNode(nodeId)
     
+    suspend fun getByNodeSync(nodeId: String): List<NodeFieldValue> = 
+        fieldValueDao.getByNodeSync(nodeId)
+
     suspend fun getByNodeAndField(nodeId: String, fieldName: String): NodeFieldValue? = 
         fieldValueDao.getByNodeAndField(nodeId, fieldName)
+
+    suspend fun getByNodeAndSchema(nodeId: String, schemaId: String): NodeFieldValue? =
+        fieldValueDao.getByNodeAndSchema(nodeId, schemaId)
     
     suspend fun upsert(value: NodeFieldValue) = fieldValueDao.upsert(value)
+
+    suspend fun update(value: NodeFieldValue) = fieldValueDao.update(value)
+
+    suspend fun deleteByIds(ids: List<String>) = fieldValueDao.deleteByIds(ids)
     
     fun getHistory(nodeId: String, fieldName: String): Flow<List<NodeFieldValue>> = 
         fieldValueDao.getHistoryForNodeAndField(nodeId, fieldName)

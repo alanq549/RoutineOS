@@ -115,6 +115,7 @@ fun TodayScreen(
                             hasConflict = entry.hasConflict,
                             resolvedNodes = entry.resolvedNodes,
                             onNodeToggle = { nodeId -> viewModel.toggleNodeCompletion(nodeId) },
+                            onNodeClick = { nodeId -> onNavigateToExecute(nodeId) },
                             onComplete = { viewModel.toggleNodeCompletion(entry.id) }
                         )
                     }

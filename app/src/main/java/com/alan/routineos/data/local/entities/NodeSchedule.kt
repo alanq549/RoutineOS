@@ -27,5 +27,7 @@ data class NodeSchedule(
     val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
     val version: Int = 1,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
-)
+    val updatedAt: Long = System.currentTimeMillis(),
+
+
+    )

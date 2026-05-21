@@ -9,11 +9,17 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface NodeScheduleDao {
+    @Query("SELECT * FROM node_schedules")
+    fun getAll(): Flow<List<NodeSchedule>>
+
     @Query("SELECT * FROM node_schedules WHERE nodeId = :nodeId")
     fun getByNodeId(nodeId: String): Flow<List<NodeSchedule>>
 
     @Query("SELECT * FROM node_schedules WHERE nodeId IN (:nodeIds)")
     suspend fun getSchedulesForNodes(nodeIds: List<String>): List<NodeSchedule>
+
+    @Query("SELECT * FROM node_schedules WHERE nodeId IN (:nodeIds)")
+    fun getSchedulesForNodesFlow(nodeIds: List<String>): Flow<List<NodeSchedule>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(schedule: NodeSchedule)

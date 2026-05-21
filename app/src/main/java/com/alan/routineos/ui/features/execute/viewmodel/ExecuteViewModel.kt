@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.execute.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -72,24 +73,53 @@ class ExecuteViewModel @Inject constructor(
     fun saveIteration() {
         viewModelScope.launch {
             val state = _uiState.value
-            val node = state.node ?: return@launch
+            val node = state.node
+            
+            if (node == null) {
+                Log.d("EXECUTE_DEBUG", "EXECUTE NODE NOT FOUND id=$nodeId")
+                return@launch
+            }
+
+            Log.d("EXECUTE_DEBUG", "EXECUTE SAVE CALLED")
             val timestamp = System.currentTimeMillis()
             
             _uiState.update { it.copy(shouldStartTimer = null) }
 
             state.fieldValues.forEach { (fieldName, value) ->
                 val schema = state.schemas.find { it.fieldName == fieldName } ?: return@forEach
-                valueRepo.upsert(
-                    NodeFieldValue(
-                        id = UUID.randomUUID().toString(),
-                        nodeId = node.id,
-                        schemaId = schema.id,
-                        fieldName = fieldName,
-                        value = value,
-                        updatedAt = timestamp,
-                        syncStatus = SyncStatus.PENDING_SYNC
+                
+                // REGLA FASE 3: Evitar duplicados por nodeId + schemaId
+                val existingValue = valueRepo.getByNodeAndSchema(node.id, schema.id)
+                
+                if (existingValue != null) {
+                    Log.d(
+                        "EXECUTE_DEBUG", 
+                        "FIELD UPSERT MODE=UPDATE nodeId=${node.id} schemaId=${schema.id} field=$fieldName old=${existingValue.value} new=$value"
                     )
-                )
+                    valueRepo.update(
+                        existingValue.copy(
+                            value = value,
+                            updatedAt = timestamp,
+                            syncStatus = SyncStatus.PENDING_SYNC
+                        )
+                    )
+                } else {
+                    Log.d(
+                        "EXECUTE_DEBUG", 
+                        "FIELD UPSERT MODE=INSERT nodeId=${node.id} schemaId=${schema.id} field=$fieldName value=$value"
+                    )
+                    valueRepo.upsert(
+                        NodeFieldValue(
+                            id = UUID.randomUUID().toString(),
+                            nodeId = node.id,
+                            schemaId = schema.id,
+                            fieldName = fieldName,
+                            value = value,
+                            updatedAt = timestamp,
+                            syncStatus = SyncStatus.PENDING_SYNC
+                        )
+                    )
+                }
             }
 
             val seriesField = state.schemas.find { 

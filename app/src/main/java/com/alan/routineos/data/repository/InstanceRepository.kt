@@ -1,10 +1,19 @@
 package com.alan.routineos.data.repository
 
+import android.util.Log
 import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.dao.*
-import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.data.local.dao.DayInstanceDao
+import com.alan.routineos.data.local.dao.FieldValueDao
+import com.alan.routineos.data.local.dao.NodeDao
+import com.alan.routineos.data.local.dao.NodeScheduleDao
+import com.alan.routineos.data.local.entities.DayInstance
+import com.alan.routineos.data.local.entities.InstanceStatus
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.Date
 import java.util.UUID
 import javax.inject.Inject
@@ -14,45 +23,103 @@ import javax.inject.Singleton
 class InstanceRepository @Inject constructor(
     private val dayInstanceDao: DayInstanceDao,
     private val nodeDao: NodeDao,
-    private val scheduleDao: ScheduleDao,
-    private val exceptionDao: ScheduleExceptionDao,
     private val nodeScheduleDao: NodeScheduleDao,
     private val fieldValueDao: FieldValueDao
+
 ) {
+    private val instanceGenerationMutex = Mutex()
+
     fun getByDate(date: Long): Flow<List<DayInstance>> = dayInstanceDao.getAllByDate(date)
-    
+
     suspend fun upsert(instance: DayInstance) = dayInstanceDao.upsert(instance)
-    
+
     suspend fun update(instance: DayInstance) = dayInstanceDao.update(instance)
 
-    suspend fun generateInstanceIfNeeded(date: Long, weekday: Int): Boolean {
-        // Check for exceptions
-        val exceptions = exceptionRepo().getActiveForDate(date).first()
-        if (exceptions.any { it.affectsGeneration }) return false
+    suspend fun generateInstanceIfNeeded(
+        templateId: String,
+        date: Long
+    ): DayInstance = instanceGenerationMutex.withLock {
 
-        // Get active schedules for this day
-        val activeSchedules = scheduleDao.getActiveForWeekday(weekday, date).first()
-        if (activeSchedules.isEmpty()) return false
+        val existing = dayInstanceDao.getByTemplateAndDate(templateId, date)
 
-        // Get existing instances for today
-        val existingInstances = dayInstanceDao.getAllByDate(date).first()
-        val existingTemplateIds = existingInstances.map { it.templateId }.toSet()
+        if (existing != null) {
+            val nodes = nodeDao.getByInstance(existing.id).first()
 
-        var generated = false
-        activeSchedules.forEach { schedule ->
-            if (!existingTemplateIds.contains(schedule.templateId)) {
-                generateInstance(schedule.templateId, date)
-                generated = true
+            if (nodes.isNotEmpty()) {
+                return@withLock existing
             }
-        }
-        
-        return generated
-    }
-    
-    private fun exceptionRepo() = exceptionDao // Helper for clarity
 
-    suspend fun generateInstance(templateId: String, date: Long): DayInstance {
-        val weekday = DateUtils.getDayOfWeek(Date(date)) 
+            Log.d(
+                "TODAY_DEBUG",
+                "EMPTY INSTANCE FOUND templateId=$templateId instanceId=${existing.id}, REGENERATING"
+            )
+
+            nodeDao.deleteByInstance(existing.id)
+            dayInstanceDao.deleteById(existing.id)
+        }
+
+        generateInstance(templateId, date)
+    }
+
+    suspend fun regenerateTemplateInstanceForDate(
+        templateId: String,
+        date: Long
+    ) = instanceGenerationMutex.withLock {
+        Log.d("TODAY_DEBUG", "REGENERATE TEMPLATE INSTANCE templateId=$templateId date=$date")
+
+        val oldInstances = dayInstanceDao.getAllByTemplateAndDate(templateId, date)
+
+        Log.d("TODAY_DEBUG", "OLD INSTANCES FOUND = ${oldInstances.size}")
+
+        oldInstances.forEach { oldInstance ->
+            Log.d("TODAY_DEBUG", "DELETE OLD INSTANCE id=${oldInstance.id}")
+
+            val nodesToDelete = nodeDao.getByInstance(oldInstance.id).first()
+
+            nodeDao.deleteByInstance(oldInstance.id)
+            Log.d("TODAY_DEBUG", "DELETE OLD INSTANCE NODES COUNT = ${nodesToDelete.size}")
+
+            dayInstanceDao.deleteById(oldInstance.id)
+            Log.d("TODAY_DEBUG", "OLD INSTANCE DELETED id=${oldInstance.id}")
+        }
+
+        generateInstance(templateId, date)
+
+        Log.d("TODAY_DEBUG", "NEW INSTANCE GENERATED templateId=$templateId date=$date")
+    }
+
+    suspend fun dedupeInstancesForDate(date: Long) = instanceGenerationMutex.withLock {
+        val instances = dayInstanceDao.getAllByDate(date).first()
+
+        Log.d("TODAY_DEBUG", "INSTANCES TODAY = ${instances.size}")
+
+        instances
+            .groupBy { it.templateId }
+            .forEach { (templateId, group) ->
+                Log.d("TODAY_DEBUG", "TEMPLATE $templateId INSTANCE COUNT = ${group.size}")
+
+                if (group.size <= 1) return@forEach
+
+                val keep = group.first()
+                val duplicates = group.filter { it.id != keep.id }
+
+                Log.d("TODAY_DEBUG", "KEEP INSTANCE = ${keep.id}")
+
+                duplicates.forEach { duplicate ->
+                    val nodes = nodeDao.getByInstance(duplicate.id).first()
+
+                    Log.d("TODAY_DEBUG", "DELETE DUPLICATE INSTANCE = ${duplicate.id}")
+                    Log.d("TODAY_DEBUG", "DELETE DUPLICATE NODES COUNT = ${nodes.size}")
+
+                    nodeDao.deleteByInstance(duplicate.id)
+                    dayInstanceDao.deleteById(duplicate.id)
+                }
+            }
+    }
+
+
+    private suspend fun generateInstance(templateId: String, date: Long): DayInstance {
+        val weekday = DateUtils.getDayOfWeek(Date(date))
         val instanceId = UUID.randomUUID().toString()
         val newInstance = DayInstance(
             id = instanceId,
@@ -62,43 +129,104 @@ class InstanceRepository @Inject constructor(
         )
         dayInstanceDao.upsert(newInstance)
 
-        val templateNodes = nodeDao.getAllByTemplate(templateId)
-        val nodeIds = templateNodes.map { it.id }
+        // FIX 1 — generateInstance() Refined
+        val allNodes = nodeDao.getAllTemplateNodesSync()
+
+        val templateNodesOnly = allNodes.filter {
+            it.templateId == templateId && it.instanceId == null
+        }
+
+        val roots = templateNodesOnly.filter {
+            it.parentId == null
+        }
+
+        Log.d("TODAY_DEBUG", "TEMPLATE NODES ONLY = ${templateNodesOnly.size}")
+        Log.d("TODAY_DEBUG", "ROOTS ONLY = ${roots.size}")
+
+        val templateTreeNodes = mutableListOf<Node>()
+        val queue = ArrayDeque<Node>()
+        queue.addAll(roots)
+
+        val visited = mutableSetOf<String>()
+        while (queue.isNotEmpty()) {
+            val node = queue.removeFirst()
+            if (node.id in visited) continue
+            visited.add(node.id)
+            templateTreeNodes.add(node)
+
+            val children = templateNodesOnly.filter { it.parentId == node.id }
+            queue.addAll(children)
+        }
+
+        Log.d("TODAY_DEBUG", "TREE TO CLONE = ${templateTreeNodes.size}")
+
+        val idMap = mutableMapOf<String?, String?>()
+        idMap[null] = null
+        templateTreeNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
+
+        val nodeIds = templateTreeNodes.map { it.id }
         val allSchedules = nodeScheduleDao.getSchedulesForNodes(nodeIds)
 
-        val idMap = mutableMapOf<String, String>()
-        templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
+        val instanceNodes = mutableListOf<Node>()
+        for (tNode in templateTreeNodes) {
+            val newNodeId = idMap[tNode.id]!!
 
-        val instanceNodes = templateNodes.map { tNode ->
-            val todaySchedule = allSchedules.find { it.nodeId == tNode.id && it.dayOfWeek == weekday }
-            
-            // Copiar valores de campos (Metadata) de la plantilla a la instancia
+            // OBLIGATORY LOG: CLONED NODE
+            Log.d(
+                "TODAY_DEBUG",
+                "CLONED NODE name=${tNode.name} oldParent=${tNode.parentId} newParent=${idMap[tNode.parentId]} instanceId=$instanceId"
+            )
+
+            // Clonar TODOS los horarios del nodo para la instancia
+            val nodeSchedules = allSchedules.filter { it.nodeId == tNode.id }
+            val todaySchedule = nodeSchedules.find { it.dayOfWeek == weekday }
+
+//            nodeSchedules.forEach { s ->
+//                nodeScheduleDao.upsert(
+//                    s.copy(
+//                        id = UUID.randomUUID().toString(),
+//                        nodeId = newNodeId
+//                    )
+//                )
+//            }
+
+            // Copiar FieldValues (Usando fieldValueDao correctamente)
             val templateValues = fieldValueDao.getByNode(tNode.id).first()
             templateValues.forEach { tValue ->
-                fieldValueDao.upsert(tValue.copy(
-                    id = UUID.randomUUID().toString(),
-                    nodeId = idMap[tNode.id]!!
-                ))
+                Log.d(
+                    "TODAY_DEBUG",
+                    "COPY FIELD TEMPLATE_TO_INSTANCE templateNode=${tNode.id} instanceNode=$newNodeId fieldName=${tValue.fieldName} value=${tValue.value}"
+                )
+                fieldValueDao.upsert(
+                    tValue.copy(
+                        id = UUID.randomUUID().toString(),
+                        nodeId = newNodeId
+                    )
+                )
             }
 
-            tNode.copy(
-                id = idMap[tNode.id]!!,
-                parentId = idMap[tNode.parentId],
-                templateId = templateId, 
-                instanceId = instanceId,
-                status = NodeStatus.PENDING,
-                scheduledTime = todaySchedule?.startTime ?: tNode.scheduledTime,
-                createdAt = System.currentTimeMillis(),
-                updatedAt = System.currentTimeMillis()
+            instanceNodes.add(
+                tNode.copy(
+                    id = newNodeId,
+                    parentId = idMap[tNode.parentId], // Remapeo correcto
+                    templateId = tNode.id,
+                    instanceId = instanceId,
+                    status = NodeStatus.PENDING,
+                    scheduledTime = todaySchedule?.startTime ?: tNode.scheduledTime,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
             )
-        }.sortedBy { it.scheduledTime ?: "99:99" }
+        }
 
         nodeDao.insertAll(instanceNodes)
-        
+        Log.d("TODAY_DEBUG", "INSTANCE NODES COUNT GENERATED = ${instanceNodes.size}")
+
         return newInstance
     }
 
-    fun getNodesForInstance(instanceId: String): Flow<List<Node>> = nodeDao.getByInstance(instanceId)
+    fun getNodesForInstance(instanceId: String): Flow<List<Node>> =
+        nodeDao.getByInstance(instanceId)
 
     suspend fun getCompletionRate(from: Long): Float {
         val totalList = dayInstanceDao.getInRange(from, System.currentTimeMillis()).first()
@@ -110,7 +238,7 @@ class InstanceRepository @Inject constructor(
     suspend fun calculateCurrentStreak(): Int {
         val instances = dayInstanceDao.getInRange(0, System.currentTimeMillis()).first()
             .sortedByDescending { it.date }
-        
+
         var streak = 0
         val oneDayMs = 24 * 60 * 60 * 1000L
         var expectedDate = DateUtils.getStartOfDay()

@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.stats.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.data.local.entities.FieldType
@@ -37,26 +38,46 @@ class StatsViewModel @Inject constructor(
         _selectedNode,
         _selectedField,
         _nodeSearchQuery,
-        flow { 
+        flow {
             val rate = instanceRepo.getCompletionRate(System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000))
             val streak = instanceRepo.calculateCurrentStreak()
             emit(rate to streak)
         }
     ) { node, field, query, metrics ->
         val templateNodes = nodeRepo.getAllTemplateNodes().first()
-        
-        val filteredNodes = if (query.isBlank()) templateNodes 
+
+        val filteredNodes = if (query.isBlank()) templateNodes
                            else templateNodes.filter { it.name.contains(query, ignoreCase = true) }
 
         var fields = emptyList<NodeMetadataSchema>()
         var history = emptyList<NodeFieldValue>()
-        
+
         if (node != null) {
-            fields = schemaRepo.getByTypeId(node.typeId).first().filter { 
+            // Log de nodo seleccionado (el template que define la métrica)
+            Log.d("STATS_DEBUG", "STATS NODE id=${node.id} name=${node.name} instanceId=${node.instanceId}")
+            
+            if (node.instanceId == null) {
+                // Confirmamos que el nodo base es un template
+                Log.d("STATS_DEBUG", "STATS INFO: Selected node is a template definition.")
+            }
+
+            fields = schemaRepo.getByTypeId(node.typeId).first().filter {
                 it.fieldType == FieldType.NUMBER || it.fieldType == FieldType.DURATION
             }
+            
             if (field != null) {
+                // La query getHistoryByTemplateNode ya filtra instanceId IS NOT NULL internamente
                 history = fieldValueRepo.getHistoryByTemplateNode(node.id, field.fieldName).first()
+                
+                history.forEach { valEntry ->
+                    Log.d("STATS_DEBUG", "STATS FIELD node=${node.name} field=${field.fieldName} value=${valEntry.value}")
+                }
+
+                // Log diagnóstico adicional para confirmar que ignoramos el valor del template si existiera
+                val templateValue = fieldValueRepo.getByNodeAndField(node.id, field.fieldName)
+                if (templateValue != null) {
+                    Log.d("STATS_DEBUG", "STATS IGNORE TEMPLATE NODE id=${node.id} name=${node.name}")
+                }
             }
         }
 

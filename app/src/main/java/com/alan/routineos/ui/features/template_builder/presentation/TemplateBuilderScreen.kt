@@ -48,8 +48,7 @@ fun TemplateBuilderScreen(
                 canSave = uiState.name.isNotBlank(),
                 onBack = onBack,
                 onSave = {
-                    viewModel.saveTemplate()
-                    onBack()
+                    viewModel.saveTemplate(onSuccess = onBack)
                 }
             )
         },

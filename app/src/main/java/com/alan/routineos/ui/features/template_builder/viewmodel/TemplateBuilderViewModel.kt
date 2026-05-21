@@ -1,17 +1,33 @@
 package com.alan.routineos.ui.features.template_builder.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.alan.routineos.data.local.entities.*
-import com.alan.routineos.data.repository.*
+import com.alan.routineos.core.util.DateUtils
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeFieldValue
+import com.alan.routineos.data.local.entities.NodeSchedule
+import com.alan.routineos.data.local.entities.RoutineTemplate
+import com.alan.routineos.data.local.entities.Schedule
+import com.alan.routineos.data.local.entities.SyncStatus
+import com.alan.routineos.data.repository.FieldValueRepository
+import com.alan.routineos.data.repository.InstanceRepository
+import com.alan.routineos.data.repository.MetadataSchemaRepository
+import com.alan.routineos.data.repository.NodeRepository
+import com.alan.routineos.data.repository.NodeTypeRepository
+import com.alan.routineos.data.repository.ScheduleRepository
+import com.alan.routineos.data.repository.TemplateRepository
 import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_COLOR_ARG
 import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_NAME_ARG
 import com.alan.routineos.ui.features.template_builder.sections.ContextCategory
 import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 import com.alan.routineos.ui.features.template_builder.state.TemplateBuilderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
@@ -24,16 +40,17 @@ class TemplateBuilderViewModel @Inject constructor(
     private val scheduleRepo: ScheduleRepository,
     private val typeRepo: NodeTypeRepository,
     private val schemaRepo: MetadataSchemaRepository,
-    private val fieldValueRepo: FieldValueRepository
+    private val fieldValueRepo: FieldValueRepository,
+    private val instanceRepo: InstanceRepository
 ) : ViewModel() {
 
     private val templateIdArg: String = checkNotNull(savedStateHandle["templateId"])
     private val initialName: String? = savedStateHandle[INITIAL_NAME_ARG]
     private val initialColor: String? = savedStateHandle[INITIAL_COLOR_ARG]
-    
+
     private val _uiState = MutableStateFlow(
         TemplateBuilderUiState(
-            templateId = if(templateIdArg == "new") null else templateIdArg,
+            templateId = if (templateIdArg == "new") null else templateIdArg,
             name = initialName ?: "",
             colorHex = initialColor ?: "#3FB950"
         )
@@ -47,41 +64,45 @@ class TemplateBuilderViewModel @Inject constructor(
     private fun loadData() {
         viewModelScope.launch {
             val types = typeRepo.getAll().first()
-            val schemasMap = mutableMapOf<String, List<NodeMetadataSchema>>()
-            types.forEach { type ->
-                schemasMap[type.id] = schemaRepo.getByTypeId(type.id).first()
-            }
+            val schemasMap = types.associate { it.id to schemaRepo.getByTypeId(it.id).first() }
             _uiState.update { it.copy(nodeTypes = types, metadataSchemas = schemasMap) }
 
             if (templateIdArg != "new") {
                 val template = templateRepo.getById(templateIdArg)
                 if (template != null) {
-                    val nodes = nodeRepo.getAllByTemplate(template.id)
-                    val schedulesMap = mutableMapOf<String, List<NodeSchedule>>()
-                    val fieldValuesMap = mutableMapOf<String, List<NodeFieldValue>>()
-                    
-                    nodes.forEach { node ->
-                        schedulesMap[node.id] = nodeRepo.getSchedulesForNode(node.id).first()
-                        fieldValuesMap[node.id] = fieldValueRepo.getByNode(node.id).first()
+                    val allTemplateNodes = nodeRepo.getAllByTemplate(template.id)
+                    val rootNodeId = template.rootNodeId
+
+                    // Separar el nodo raíz de la actividad de los bloques del editor
+                    // Los hijos directos del root de la actividad se ven como parentId = null en el editor
+                    val nodesForEditor = allTemplateNodes.filter { it.id != rootNodeId }.map {
+                        if (it.parentId == rootNodeId) it.copy(parentId = null) else it
+                    }
+
+                    val schedulesMap = allTemplateNodes.associate {
+                        it.id to nodeRepo.getSchedulesForNode(it.id).first()
+                    }
+                    val fieldValuesMap = allTemplateNodes.associate {
+                        it.id to fieldValueRepo.getByNode(it.id).first()
                     }
 
                     val globalSchedules = scheduleRepo.getByTemplate(template.id).first()
-                    val selectedDays = globalSchedules.map { it.weekday }.toSet()
-                    val firstSched = globalSchedules.firstOrNull()
 
-                    _uiState.update { it.copy(
-                        name = template.name,
-                        colorHex = template.colorHex,
-                        category = template.category,
-                        timeMode = template.timeMode,
-                        nodes = nodes,
-                        nodeSchedules = schedulesMap,
-                        fieldValues = fieldValuesMap,
-                        selectedDays = selectedDays,
-                        startTime = firstSched?.startTime ?: "08:00",
-                        endTime = firstSched?.endTime ?: "09:00",
-                        isLoading = false
-                    ) }
+                    _uiState.update {
+                        it.copy(
+                            name = template.name,
+                            colorHex = template.colorHex,
+                            category = template.category,
+                            timeMode = template.timeMode,
+                            nodes = nodesForEditor.sortedBy { it.position },
+                            nodeSchedules = schedulesMap,
+                            fieldValues = fieldValuesMap,
+                            selectedDays = globalSchedules.map { it.weekday }.toSet(),
+                            startTime = globalSchedules.firstOrNull()?.startTime ?: "08:00",
+                            endTime = globalSchedules.firstOrNull()?.endTime ?: "09:00",
+                            isLoading = false
+                        )
+                    }
                 }
             } else {
                 _uiState.update { it.copy(isLoading = false) }
@@ -95,7 +116,8 @@ class TemplateBuilderViewModel @Inject constructor(
 
     fun toggleDay(day: Int) {
         _uiState.update { state ->
-            val newDays = if (state.selectedDays.contains(day)) state.selectedDays - day else state.selectedDays + day
+            val newDays =
+                if (state.selectedDays.contains(day)) state.selectedDays - day else state.selectedDays + day
             state.copy(selectedDays = newDays)
         }
     }
@@ -105,12 +127,15 @@ class TemplateBuilderViewModel @Inject constructor(
     fun updateEndTime(time: String) = _uiState.update { it.copy(endTime = time) }
 
     fun addNode(name: String, typeId: String, parentId: String?) {
+        val currentNodes = _uiState.value.nodes
+        val position = currentNodes.count { it.parentId == parentId }
         val newNode = Node(
             id = UUID.randomUUID().toString(),
             name = name,
             typeId = typeId,
             parentId = parentId,
             templateId = _uiState.value.templateId ?: "TEMP_ID",
+            position = position,
             syncStatus = SyncStatus.PENDING_SYNC
         )
         _uiState.update { it.copy(nodes = it.nodes + newNode) }
@@ -134,19 +159,23 @@ class TemplateBuilderViewModel @Inject constructor(
             val newValues = if (currentValues.any { it.schemaId == schemaId }) {
                 currentValues.map { if (it.schemaId == schemaId) it.copy(value = value) else it }
             } else {
-                currentValues + NodeFieldValue(nodeId = nodeId, schemaId = schemaId, fieldName = fieldName, value = value)
+                currentValues + NodeFieldValue(
+                    nodeId = nodeId,
+                    schemaId = schemaId,
+                    fieldName = fieldName,
+                    value = value
+                )
             }
             state.copy(fieldValues = state.fieldValues + (nodeId to newValues))
         }
     }
 
     fun deleteNode(nodeId: String) {
-        // Recursive deletion in state
         val toDelete = mutableSetOf(nodeId)
         var added = true
-        while(added) {
+        while (added) {
             added = false
-            _uiState.value.nodes.forEach { 
+            _uiState.value.nodes.forEach {
                 if (it.parentId != null && toDelete.contains(it.parentId) && !toDelete.contains(it.id)) {
                     toDelete.add(it.id)
                     added = true
@@ -172,60 +201,124 @@ class TemplateBuilderViewModel @Inject constructor(
         }
     }
 
-    fun saveTemplate() {
+    fun saveTemplate(onSuccess: () -> Unit) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isSaving = true) }
-            val state = _uiState.value
-            val finalTemplateId = state.templateId ?: UUID.randomUUID().toString()
-            
-            // 1. Root Node
-            var rootNode = state.nodes.find { it.parentId == null }
-            if (rootNode == null) {
-                rootNode = Node(id = UUID.randomUUID().toString(), name = state.name, typeId = "default", templateId = finalTemplateId)
-            }
+            try {
+                _uiState.update { it.copy(isSaving = true) }
+                val state = _uiState.value
+                val finalTemplateId = state.templateId ?: UUID.randomUUID().toString()
 
-            // 2. Routine Template
-            val template = RoutineTemplate(
-                id = finalTemplateId,
-                rootNodeId = rootNode.id,
-                name = state.name,
-                colorHex = state.colorHex,
-                category = state.category,
-                timeMode = state.timeMode,
-                updatedAt = System.currentTimeMillis()
-            )
-            templateRepo.upsert(template)
-            
-            // 3. Clean and Save Nodes
-            nodeRepo.deleteByTemplate(finalTemplateId)
-            val nodesToSave = (state.nodes + rootNode).distinctBy { it.id }.map { 
-                it.copy(templateId = finalTemplateId, syncStatus = SyncStatus.PENDING_SYNC) 
-            }
-            nodeRepo.insertAll(nodesToSave)
+                // 1. Activity Root Node (Nivel 0) - e.g. "GYM"
+                val currentTemplate = state.templateId?.let { templateRepo.getById(it) }
+                val rootNodeId = currentTemplate?.rootNodeId ?: UUID.randomUUID().toString()
 
-            // 4. Clean and Save Schedules
-            scheduleRepo.deleteByTemplate(finalTemplateId)
-            state.selectedDays.forEach { day ->
-                scheduleRepo.upsert(Schedule(
+                val activityRootNode = Node(
+                    id = rootNodeId,
+                    name = state.name,
+                    typeId = "activity_root",
                     templateId = finalTemplateId,
-                    weekday = day,
-                    startTime = if (state.timeMode != TimeMode.FLEXIBLE) state.startTime else null,
-                    endTime = if (state.timeMode == TimeMode.RANGE) state.endTime else null,
-                    syncStatus = SyncStatus.PENDING_SYNC
-                ))
-            }
+                    parentId = null,
+                    instanceId = null,
+                    position = 0
+                )
 
-            // 5. Metadata for each node
-            state.fieldValues.forEach { (nodeId, values) ->
-                values.forEach { fieldValueRepo.upsert(it.copy(nodeId = nodeId)) }
-            }
+                // 2. Map blocks (Nivel 1+) - Re-asignar parentId=rootNodeId si estaban en el nivel superior del editor
+                val allNodesToSave = mutableListOf<Node>()
+                allNodesToSave.add(activityRootNode)
 
-            // 6. Node-specific schedules
-            state.nodeSchedules.forEach { (nodeId, schedules) ->
-                nodeRepo.saveSchedules(nodeId, schedules)
+                state.nodes.forEach { node ->
+                    // Si el nodo no tiene padre en el editor, su padre real es la actividad principal
+                    val finalParentId = node.parentId.takeIf { !it.isNullOrBlank() } ?: rootNodeId
+                    allNodesToSave.add(
+                        node.copy(
+                            parentId = finalParentId,
+                            templateId = finalTemplateId,
+                            instanceId = null
+                        )
+                    )
+                }
+
+                // OBLIGATORY LOGS BEFORE SAVE
+                Log.d("TODAY_DEBUG", "EDITOR TREE COUNT = ${allNodesToSave.size}")
+                allNodesToSave.forEach { node ->
+                    Log.d(
+                        "TODAY_DEBUG",
+                        "EDITOR NODE name=${node.name} parentId=${node.parentId} templateId=${node.templateId} instanceId=${node.instanceId}"
+                    )
+                }
+
+                // 3. Routine Template
+                val template = RoutineTemplate(
+                    id = finalTemplateId,
+                    rootNodeId = rootNodeId,
+                    name = state.name,
+                    colorHex = state.colorHex,
+                    category = state.category,
+                    timeMode = state.timeMode,
+                    updatedAt = System.currentTimeMillis()
+                )
+                templateRepo.upsert(template)
+
+                // 4. Clean and Save Nodes
+                nodeRepo.deleteByTemplate(finalTemplateId)
+                nodeRepo.insertAll(allNodesToSave)
+
+                // 5. Global Schedules
+                scheduleRepo.deleteByTemplate(finalTemplateId)
+                state.selectedDays.forEach { day ->
+                    scheduleRepo.upsert(
+                        Schedule(
+                            templateId = finalTemplateId,
+                            weekday = day,
+                            startTime = if (state.timeMode != TimeMode.FLEXIBLE) state.startTime else null,
+                            endTime = if (state.timeMode == TimeMode.RANGE) state.endTime else null,
+                            syncStatus = SyncStatus.PENDING_SYNC
+                        )
+                    )
+                }
+
+                // 6. Metadata
+                state.fieldValues.forEach { (nodeId, values) ->
+                    values.forEach { fieldValueRepo.upsert(it.copy(nodeId = nodeId)) }
+                }
+
+                // 7. Node specific schedules
+                state.nodeSchedules.forEach { (nodeId, schedules) ->
+                    val exists = nodeRepo.getById(nodeId)
+
+                    if (exists == null) {
+                        Log.e("TODAY_DEBUG", "SKIP SCHEDULES: node does not exist nodeId=$nodeId")
+                        return@forEach
+                    }
+
+                    nodeRepo.saveSchedules(nodeId, schedules)
+                }
+
+                // OBLIGATORY VALIDATION LOGS AFTER SAVE
+                val savedNodesFromDb = nodeRepo.getAllByTemplate(finalTemplateId)
+                Log.d("TODAY_DEBUG", "SAVED TEMPLATE NODES COUNT = ${savedNodesFromDb.size}")
+                savedNodesFromDb.forEach { node ->
+                    Log.d(
+                        "TODAY_DEBUG",
+                        "SAVED NODE name=${node.name} parentId=${node.parentId} templateId=${node.templateId} instanceId=${node.instanceId}"
+                    )
+                }
+
+                instanceRepo.dedupeInstancesForDate(DateUtils.getStartOfDay())
+
+
+                // Regenerar instancia para hoy
+                instanceRepo.regenerateTemplateInstanceForDate(
+                    finalTemplateId,
+                    DateUtils.getStartOfDay()
+                )
+
+                _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId) }
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("TODAY_DEBUG", "Error saving template", e)
+                _uiState.update { it.copy(isSaving = false) }
             }
-            
-            _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId) }
         }
     }
 }
