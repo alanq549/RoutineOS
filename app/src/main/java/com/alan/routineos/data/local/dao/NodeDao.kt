@@ -36,6 +36,9 @@ interface NodeDao {
     @Update
     suspend fun update(node: Node)
 
+    @Query("DELETE FROM nodes WHERE id = :id")
+    suspend fun deleteById(id: String)
+
     @Query("DELETE FROM nodes WHERE templateId = :templateId AND instanceId IS NULL")
     suspend fun deleteByTemplate(templateId: String)
 

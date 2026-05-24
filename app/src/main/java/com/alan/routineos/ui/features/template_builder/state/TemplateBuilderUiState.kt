@@ -26,6 +26,8 @@ data class TemplateBuilderUiState(
     val nodeTypes: List<NodeType> = emptyList(),
     val metadataSchemas: Map<String, List<NodeMetadataSchema>> = emptyMap(), // typeId -> list of schemas
 
+    val dirtyScheduleNodeIds: Set<String> = emptySet(),
+
     val isLoading: Boolean = true,
     val isSaving: Boolean = false
 )

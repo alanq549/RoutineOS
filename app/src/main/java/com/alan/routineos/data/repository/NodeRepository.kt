@@ -34,6 +34,8 @@ class NodeRepository @Inject constructor(
 
     suspend fun update(node: Node) = nodeDao.update(node)
 
+    suspend fun deleteById(id: String) = nodeDao.deleteById(id)
+
     suspend fun deleteByTemplate(templateId: String) = nodeDao.deleteByTemplate(templateId)
 
     // NodeSchedule methods
@@ -43,13 +45,13 @@ class NodeRepository @Inject constructor(
         nodeScheduleDao.getByNodeId(nodeId)
 
     suspend fun upsertSchedule(schedule: NodeSchedule) =
-        nodeScheduleDao.upsert(schedule) /// Function "upsertSchedule" is never used
+        nodeScheduleDao.upsert(schedule)
 
     suspend fun deleteSchedulesByNodeId(nodeId: String) =
-        nodeScheduleDao.deleteByNodeId(nodeId) //Function "deleteSchedulesByNodeId" is never used
+        nodeScheduleDao.deleteByNodeId(nodeId)
 
     suspend fun saveSchedules(nodeId: String, schedules: List<NodeSchedule>) {
-        Log.d("TODAY_DEBUG", "SAVE SCHEDULES nodeId=$nodeId count=${schedules.size}")
+        Log.d("TODAY_DEBUG", "DELETE NODE SCHEDULES id=$nodeId")
 
         nodeScheduleDao.deleteByNodeId(nodeId)
 
@@ -62,7 +64,7 @@ class NodeRepository @Inject constructor(
         fixedSchedules.forEach {
             Log.d(
                 "TODAY_DEBUG",
-                "INSERT NODE SCHEDULE nodeId=${it.nodeId} dayOfWeek=${it.dayOfWeek} start=${it.startTime} end=${it.endTime}"
+                "INSERT SCHEDULE id=${it.nodeId} day=${it.dayOfWeek} start=${it.startTime} end=${it.endTime}"
             )
         }
 

@@ -192,7 +192,26 @@ class TemplateBuilderViewModel @Inject constructor(
     }
 
     fun updateNodeSchedules(nodeId: String, schedules: List<NodeSchedule>) {
-        _uiState.update { it.copy(nodeSchedules = it.nodeSchedules + (nodeId to schedules)) }
+        // OBLIGATORY LOGS BEFORE SCHEDULE EDIT
+        _uiState.value.nodes.forEach { node ->
+            Log.d("TODAY_DEBUG", "TREE BEFORE SCHEDULE EDIT node=${node.name} id=${node.id} parentId=${node.parentId}")
+        }
+
+        val nodeName = _uiState.value.nodes.find { it.id == nodeId }?.name ?: "Unknown"
+        Log.d("TODAY_DEBUG", "SCHEDULE DIRTY node=$nodeName id=$nodeId")
+        
+        _uiState.update { state ->
+            // REGLA CRÍTICA: SOLO MODIFICA nodeSchedules y dirtyScheduleNodeIds. NO TOCAR state.nodes.
+            state.copy(
+                nodeSchedules = state.nodeSchedules + (nodeId to schedules),
+                dirtyScheduleNodeIds = state.dirtyScheduleNodeIds + nodeId
+            ) 
+        }
+
+        // OBLIGATORY LOGS AFTER SCHEDULE EDIT
+        _uiState.value.nodes.forEach { node ->
+            Log.d("TODAY_DEBUG", "TREE AFTER SCHEDULE EDIT node=${node.name} id=${node.id} parentId=${node.parentId}")
+        }
     }
 
     fun toggleNodeSequential(nodeId: String, isSequential: Boolean) {
@@ -223,27 +242,23 @@ class TemplateBuilderViewModel @Inject constructor(
                 )
 
                 // 2. Map blocks (Nivel 1+) - Re-asignar parentId=rootNodeId si estaban en el nivel superior del editor
-                val allNodesToSave = mutableListOf<Node>()
-                allNodesToSave.add(activityRootNode)
-
-                state.nodes.forEach { node ->
-                    // Si el nodo no tiene padre en el editor, su padre real es la actividad principal
+                val nodesToSave = state.nodes.map { node ->
                     val finalParentId = node.parentId.takeIf { !it.isNullOrBlank() } ?: rootNodeId
-                    allNodesToSave.add(
-                        node.copy(
-                            parentId = finalParentId,
-                            templateId = finalTemplateId,
-                            instanceId = null
-                        )
+                    node.copy(
+                        parentId = finalParentId,
+                        templateId = finalTemplateId,
+                        instanceId = null
                     )
                 }
+
+                val allNodesToSave = listOf(activityRootNode) + nodesToSave
 
                 // OBLIGATORY LOGS BEFORE SAVE
                 Log.d("TODAY_DEBUG", "EDITOR TREE COUNT = ${allNodesToSave.size}")
                 allNodesToSave.forEach { node ->
                     Log.d(
                         "TODAY_DEBUG",
-                        "EDITOR NODE name=${node.name} parentId=${node.parentId} templateId=${node.templateId} instanceId=${node.instanceId}"
+                        "EDITOR NODE name=${node.name} id=${node.id} parentId=${node.parentId}"
                     )
                 }
 
@@ -259,8 +274,18 @@ class TemplateBuilderViewModel @Inject constructor(
                 )
                 templateRepo.upsert(template)
 
-                // 4. Clean and Save Nodes
-                nodeRepo.deleteByTemplate(finalTemplateId)
+                // 4. Save Nodes SMARTLY (Avoid delete all to preserve schedules)
+                val existingNodes = nodeRepo.getAllByTemplate(finalTemplateId)
+                val newNodeIds = allNodesToSave.map { it.id }.toSet()
+
+                // Delete nodes that are no longer in the editor
+                existingNodes.forEach { existingNode ->
+                    if (!newNodeIds.contains(existingNode.id)) {
+                        nodeRepo.deleteById(existingNode.id)
+                    }
+                }
+
+                // Upsert current nodes
                 nodeRepo.insertAll(allNodesToSave)
 
                 // 5. Global Schedules
@@ -282,30 +307,37 @@ class TemplateBuilderViewModel @Inject constructor(
                     values.forEach { fieldValueRepo.upsert(it.copy(nodeId = nodeId)) }
                 }
 
-                // 7. Node specific schedules
-                state.nodeSchedules.forEach { (nodeId, schedules) ->
-                    val exists = nodeRepo.getById(nodeId)
-
-                    if (exists == null) {
-                        Log.e("TODAY_DEBUG", "SKIP SCHEDULES: node does not exist nodeId=$nodeId")
-                        return@forEach
-                    }
-
+                // 7. Node specific schedules - ONLY DIRTY ONES
+                Log.d("TODAY_DEBUG", "DIRTY SCHEDULE IDS = ${state.dirtyScheduleNodeIds}")
+                state.dirtyScheduleNodeIds.forEach { nodeId ->
+                    val schedules = state.nodeSchedules[nodeId] ?: emptyList()
+                    val node = allNodesToSave.find { it.id == nodeId } ?: return@forEach
+                    
+                    Log.d("TODAY_DEBUG", "SCHEDULE SAVE START node=${node.name} id=$nodeId")
+                    
+                    val oldSchedules = nodeRepo.getSchedulesForNode(nodeId).first()
+                    Log.d("TODAY_DEBUG", "OLD SCHEDULE COUNT id=$nodeId count=${oldSchedules.size}")
+                    
+                    // nodeRepo.saveSchedules internally does the delete and insert logs
                     nodeRepo.saveSchedules(nodeId, schedules)
                 }
 
                 // OBLIGATORY VALIDATION LOGS AFTER SAVE
                 val savedNodesFromDb = nodeRepo.getAllByTemplate(finalTemplateId)
-                Log.d("TODAY_DEBUG", "SAVED TEMPLATE NODES COUNT = ${savedNodesFromDb.size}")
+                
+                Log.d("TODAY_DEBUG", "TREE AFTER SAVE:")
                 savedNodesFromDb.forEach { node ->
-                    Log.d(
-                        "TODAY_DEBUG",
-                        "SAVED NODE name=${node.name} parentId=${node.parentId} templateId=${node.templateId} instanceId=${node.instanceId}"
-                    )
+                    Log.d("TODAY_DEBUG", "node=${node.name} id=${node.id} parentId=${node.parentId}")
+                }
+                
+                Log.d("TODAY_DEBUG", "SCHEDULES AFTER SAVE:")
+                savedNodesFromDb.forEach { node ->
+                    val schedules = nodeRepo.getSchedulesForNode(node.id).first()
+                    val days = schedules.map { it.dayOfWeek }.joinToString(",")
+                    Log.d("TODAY_DEBUG", "node=${node.name} id=${node.id} days=$days")
                 }
 
                 instanceRepo.dedupeInstancesForDate(DateUtils.getStartOfDay())
-
 
                 // Regenerar instancia para hoy
                 instanceRepo.regenerateTemplateInstanceForDate(
@@ -313,7 +345,7 @@ class TemplateBuilderViewModel @Inject constructor(
                     DateUtils.getStartOfDay()
                 )
 
-                _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId) }
+                _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId, dirtyScheduleNodeIds = emptySet()) }
                 onSuccess()
             } catch (e: Exception) {
                 Log.e("TODAY_DEBUG", "Error saving template", e)
