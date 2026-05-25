@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
 
@@ -72,11 +73,31 @@ class TemplateBuilderViewModel @Inject constructor(
                 if (template != null) {
                     val allTemplateNodes = nodeRepo.getAllByTemplate(template.id)
                     val rootNodeId = template.rootNodeId
+                    val rootNode = allTemplateNodes.find { it.id == rootNodeId }
+                    
+                    val globalSchedules = scheduleRepo.getByTemplate(template.id).first()
+                    val firstSchedule = globalSchedules.firstOrNull()
+                    
+                    val dbStartTime = firstSchedule?.startTime ?: rootNode?.scheduledTime ?: "08:00"
+                    val dbEndTime = if (template.timeMode == TimeMode.RANGE || template.timeMode == TimeMode.DURATION) {
+                        firstSchedule?.endTime ?: rootNode?.durationMinutes?.let { calculateEndTime(dbStartTime, it) } ?: "09:00"
+                    } else {
+                        null
+                    }
+
+                    // OBLIGATORY LOGS FOR DB STATE
+                    allTemplateNodes.forEach { node ->
+                        val isRoot = node.id == rootNodeId
+                        val startLog = node.scheduledTime ?: "null"
+                        val endLog = if (isRoot) (dbEndTime ?: "null") else "null"
+                        Log.d("TODAY_DEBUG", "LOAD DB NODE name=${node.name} id=${node.id} parentId=${node.parentId} mode=${template.timeMode} start=$startLog end=$endLog")
+                    }
 
                     // Separar el nodo raíz de la actividad de los bloques del editor
-                    // Los hijos directos del root de la actividad se ven como parentId = null en el editor
-                    val nodesForEditor = allTemplateNodes.filter { it.id != rootNodeId }.map {
-                        if (it.parentId == rootNodeId) it.copy(parentId = null) else it
+                    val nodesForEditor = allTemplateNodes.filter { it.id != rootNodeId }.map { node ->
+                        val mappedNode = if (node.parentId == rootNodeId) node.copy(parentId = null) else node
+                        Log.d("TODAY_DEBUG", "LOAD UI NODE name=${mappedNode.name} id=${mappedNode.id} parentId=${mappedNode.parentId}")
+                        mappedNode
                     }
 
                     val schedulesMap = allTemplateNodes.associate {
@@ -86,7 +107,19 @@ class TemplateBuilderViewModel @Inject constructor(
                         it.id to fieldValueRepo.getByNode(it.id).first()
                     }
 
-                    val globalSchedules = scheduleRepo.getByTemplate(template.id).first()
+                    var duration = 60
+                    if (template.timeMode == TimeMode.DURATION && dbStartTime != null && dbEndTime != null) {
+                        try {
+                            val startParts = dbStartTime.split(":")
+                            val endParts = dbEndTime.split(":")
+                            val startMins = startParts[0].toInt() * 60 + startParts[1].toInt()
+                            val endMins = endParts[0].toInt() * 60 + endParts[1].toInt()
+                            duration = endMins - startMins
+                            if (duration < 0) duration += 1440
+                        } catch (e: Exception) {
+                            Log.e("TODAY_DEBUG", "Error calculating duration", e)
+                        }
+                    }
 
                     _uiState.update {
                         it.copy(
@@ -98,8 +131,9 @@ class TemplateBuilderViewModel @Inject constructor(
                             nodeSchedules = schedulesMap,
                             fieldValues = fieldValuesMap,
                             selectedDays = globalSchedules.map { it.weekday }.toSet(),
-                            startTime = globalSchedules.firstOrNull()?.startTime ?: "08:00",
-                            endTime = globalSchedules.firstOrNull()?.endTime ?: "09:00",
+                            startTime = dbStartTime,
+                            endTime = dbEndTime ?: "09:00",
+                            durationMinutes = duration,
                             isLoading = false
                         )
                     }
@@ -125,6 +159,7 @@ class TemplateBuilderViewModel @Inject constructor(
     fun updateTimeMode(mode: TimeMode) = _uiState.update { it.copy(timeMode = mode) }
     fun updateStartTime(time: String) = _uiState.update { it.copy(startTime = time) }
     fun updateEndTime(time: String) = _uiState.update { it.copy(endTime = time) }
+    fun updateDurationMinutes(minutes: Int) = _uiState.update { it.copy(durationMinutes = minutes) }
 
     fun addNode(name: String, typeId: String, parentId: String?) {
         val currentNodes = _uiState.value.nodes
@@ -220,6 +255,19 @@ class TemplateBuilderViewModel @Inject constructor(
         }
     }
 
+    private fun calculateEndTime(startTime: String, durationMinutes: Int): String {
+        try {
+            val parts = startTime.split(":")
+            val totalMins = parts[0].toInt() * 60 + parts[1].toInt() + durationMinutes
+            val finalMins = totalMins % 1440
+            val h = finalMins / 60
+            val m = finalMins % 60
+            return String.format(Locale.US, "%02d:%02d", h, m)
+        } catch (e: Exception) {
+            return "09:00"
+        }
+    }
+
     fun saveTemplate(onSuccess: () -> Unit) {
         viewModelScope.launch {
             try {
@@ -231,6 +279,17 @@ class TemplateBuilderViewModel @Inject constructor(
                 val currentTemplate = state.templateId?.let { templateRepo.getById(it) }
                 val rootNodeId = currentTemplate?.rootNodeId ?: UUID.randomUUID().toString()
 
+                val rootStartTime = if (state.timeMode != TimeMode.FLEXIBLE) state.startTime else null
+                val finalEndTime = if (state.timeMode == TimeMode.DURATION) {
+                    calculateEndTime(state.startTime, state.durationMinutes)
+                } else {
+                    state.endTime
+                }
+                val rootEndTime = if (state.timeMode == TimeMode.RANGE || state.timeMode == TimeMode.DURATION) finalEndTime else null
+
+                // OBLIGATORY LOG AT SAVE
+                Log.d("TODAY_DEBUG", "SAVE ROOT TIME node=${state.name} mode=${state.timeMode} start=$rootStartTime end=$rootEndTime")
+
                 val activityRootNode = Node(
                     id = rootNodeId,
                     name = state.name,
@@ -238,9 +297,12 @@ class TemplateBuilderViewModel @Inject constructor(
                     templateId = finalTemplateId,
                     parentId = null,
                     instanceId = null,
-                    position = 0
+                    position = 0,
+                    scheduledTime = rootStartTime,
+                    durationMinutes = if (state.timeMode == TimeMode.DURATION) state.durationMinutes else null,
+                    isSequential = state.timeMode == TimeMode.FLEXIBLE
                 )
-
+                
                 // 2. Map blocks (Nivel 1+) - Re-asignar parentId=rootNodeId si estaban en el nivel superior del editor
                 val nodesToSave = state.nodes.map { node ->
                     val finalParentId = node.parentId.takeIf { !it.isNullOrBlank() } ?: rootNodeId
@@ -258,7 +320,7 @@ class TemplateBuilderViewModel @Inject constructor(
                 allNodesToSave.forEach { node ->
                     Log.d(
                         "TODAY_DEBUG",
-                        "EDITOR NODE name=${node.name} id=${node.id} parentId=${node.parentId}"
+                        "EDITOR NODE name=${node.name} id=${node.id} parentId=${node.parentId} start=${node.scheduledTime}"
                     )
                 }
 
@@ -274,29 +336,44 @@ class TemplateBuilderViewModel @Inject constructor(
                 )
                 templateRepo.upsert(template)
 
-                // 4. Save Nodes SMARTLY (Avoid delete all to preserve schedules)
-                val existingNodes = nodeRepo.getAllByTemplate(finalTemplateId)
+                // 4. Save Nodes SMARTLY (Avoid REPLACE to preserve schedules due to CASCADE DELETE)
+                val existingNodesFromDb = nodeRepo.getAllByTemplate(finalTemplateId)
+                val existingNodeMap = existingNodesFromDb.associateBy { it.id }
                 val newNodeIds = allNodesToSave.map { it.id }.toSet()
 
                 // Delete nodes that are no longer in the editor
-                existingNodes.forEach { existingNode ->
+                existingNodesFromDb.forEach { existingNode ->
                     if (!newNodeIds.contains(existingNode.id)) {
                         nodeRepo.deleteById(existingNode.id)
                     }
                 }
 
-                // Upsert current nodes
-                nodeRepo.insertAll(allNodesToSave)
+                // PATCH behavior for nodes: only use SQL UPDATE for existing ones to avoid CASCADE DELETE on schedules
+                allNodesToSave.forEach { node ->
+                    val existing = existingNodeMap[node.id]
+                    if (existing != null) {
+                        // Preservar campos que no manejamos en el editor pero que Room sobreescribiría si no los pasamos
+                        nodeRepo.update(node.copy(
+                            createdAt = existing.createdAt,
+                            status = existing.status,
+                            version = existing.version,
+                            syncStatus = existing.syncStatus
+                        )) 
+                    } else {
+                        nodeRepo.upsert(node) // Nodo nuevo
+                    }
+                }
 
                 // 5. Global Schedules
                 scheduleRepo.deleteByTemplate(finalTemplateId)
+                
                 state.selectedDays.forEach { day ->
                     scheduleRepo.upsert(
                         Schedule(
                             templateId = finalTemplateId,
                             weekday = day,
-                            startTime = if (state.timeMode != TimeMode.FLEXIBLE) state.startTime else null,
-                            endTime = if (state.timeMode == TimeMode.RANGE) state.endTime else null,
+                            startTime = rootStartTime,
+                            endTime = rootEndTime,
                             syncStatus = SyncStatus.PENDING_SYNC
                         )
                     )
@@ -307,19 +384,24 @@ class TemplateBuilderViewModel @Inject constructor(
                     values.forEach { fieldValueRepo.upsert(it.copy(nodeId = nodeId)) }
                 }
 
-                // 7. Node specific schedules - ONLY DIRTY ONES
+                // 7. Node specific schedules - PATCH behavior
                 Log.d("TODAY_DEBUG", "DIRTY SCHEDULE IDS = ${state.dirtyScheduleNodeIds}")
-                state.dirtyScheduleNodeIds.forEach { nodeId ->
-                    val schedules = state.nodeSchedules[nodeId] ?: emptyList()
-                    val node = allNodesToSave.find { it.id == nodeId } ?: return@forEach
-                    
-                    Log.d("TODAY_DEBUG", "SCHEDULE SAVE START node=${node.name} id=$nodeId")
-                    
-                    val oldSchedules = nodeRepo.getSchedulesForNode(nodeId).first()
-                    Log.d("TODAY_DEBUG", "OLD SCHEDULE COUNT id=$nodeId count=${oldSchedules.size}")
-                    
-                    // nodeRepo.saveSchedules internally does the delete and insert logs
-                    nodeRepo.saveSchedules(nodeId, schedules)
+                
+                allNodesToSave.forEach { node ->
+                    val nodeId = node.id
+                    if (state.dirtyScheduleNodeIds.contains(nodeId)) {
+                        val schedules = state.nodeSchedules[nodeId] ?: return@forEach
+                        
+                        Log.d("TODAY_DEBUG", "SCHEDULE SAVE START nodeId=$nodeId")
+                        val oldSchedules = nodeRepo.getSchedulesForNode(nodeId).first()
+                        Log.d("TODAY_DEBUG", "OLD SCHEDULE COUNT id=$nodeId count=${oldSchedules.size}")
+
+                        // nodeRepo.saveSchedules internally handles delete and insertion logs
+                        nodeRepo.saveSchedules(nodeId, schedules)
+                    } else {
+                        // OBLIGATORY LOG FOR SKIPPED NODES
+                        Log.d("TODAY_DEBUG", "SKIP SCHEDULE SAVE nodeId=$nodeId reason=not_dirty")
+                    }
                 }
 
                 // OBLIGATORY VALIDATION LOGS AFTER SAVE
@@ -327,7 +409,7 @@ class TemplateBuilderViewModel @Inject constructor(
                 
                 Log.d("TODAY_DEBUG", "TREE AFTER SAVE:")
                 savedNodesFromDb.forEach { node ->
-                    Log.d("TODAY_DEBUG", "node=${node.name} id=${node.id} parentId=${node.parentId}")
+                    Log.d("TODAY_DEBUG", "node=${node.name} id=${node.id} parentId=${node.parentId} start=${node.scheduledTime}")
                 }
                 
                 Log.d("TODAY_DEBUG", "SCHEDULES AFTER SAVE:")

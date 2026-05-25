@@ -19,6 +19,7 @@ data class TemplateBuilderUiState(
     val timeMode: TimeMode = TimeMode.RANGE,
     val startTime: String = "08:00",
     val endTime: String = "09:00",
+    val durationMinutes: Int = 60,
 
     val nodes: List<Node> = emptyList(),
     val nodeSchedules: Map<String, List<NodeSchedule>> = emptyMap(), // nodeId -> list of schedules

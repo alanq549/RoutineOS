@@ -67,6 +67,7 @@ class TodayViewModel @Inject constructor(
             val today = DateUtils.getStartOfDay()
             val weekday = DateUtils.getDayOfWeek()
 
+            Log.d("TODAY_DEBUG", "INITIALIZING TODAY - Date: $today, Weekday: $weekday")
             instanceRepo.dedupeInstancesForDate(today)
             generateInstanceIfNeeded(today, weekday)
 
@@ -85,8 +86,10 @@ class TodayViewModel @Inject constructor(
             instanceRepo.getByDate(today)
                 .flatMapLatest { instances ->
                     if (instances.isEmpty()) {
+                        Log.d("TODAY_DEBUG", "OBSERVE: No instances found for today")
                         flowOf(emptyList<TimelineEntryUi>())
                     } else {
+                        Log.d("TODAY_DEBUG", "OBSERVE: Found ${instances.size} instances. Resolving data...")
                         val templatesFlow = templateRepo.getAll()
                         val schedulesFlow = scheduleRepo.getAll()
                         val nodeSchedulesFlow = nodeRepo.getAllNodeSchedules()
@@ -115,12 +118,18 @@ class TodayViewModel @Inject constructor(
                             nodeSchedulesFlow,
                             fieldValuesFlow,
                             schemasFlow
-                        ) { args ->
+                        ) { args: Array<*> ->
+                            @Suppress("UNCHECKED_CAST")
                             val nodesWithId = args[0] as List<Pair<Node, String>>
+                            @Suppress("UNCHECKED_CAST")
                             val templates = args[1] as List<RoutineTemplate>
+                            @Suppress("UNCHECKED_CAST")
                             val schedules = args[2] as List<Schedule>
+                            @Suppress("UNCHECKED_CAST")
                             val nodeSchedules = args[3] as List<NodeSchedule>
+                            @Suppress("UNCHECKED_CAST")
                             val fieldValues = args[4] as List<NodeFieldValue>
+                            @Suppress("UNCHECKED_CAST")
                             val schemas = args[5] as List<NodeMetadataSchema>
 
                             buildTimeline(
@@ -136,6 +145,18 @@ class TodayViewModel @Inject constructor(
                     }
                 }
                 .collect { entries ->
+                    Log.d("TODAY_DEBUG", "--- TODAY TIMELINE RENDER UPDATE ---")
+                    Log.d("TODAY_DEBUG", "Activities to display: ${entries.size}")
+                    entries.forEachIndexed { index, entry ->
+                        val fieldsLog = entry.fields.joinToString { "${it.label}: ${it.value}" }
+                        Log.d("TODAY_DEBUG", "  [$index] ACTIVITY: [${entry.time}] ${entry.title} | Status: ${entry.statusLabel} | Sort: ${entry.sortTime} | Fields: $fieldsLog")
+                        entry.resolvedNodes.forEach { node ->
+                            val nodeFieldsLog = node.fields.joinToString { "${it.label}: ${it.value}" }
+                            Log.d("TODAY_DEBUG", "    node: ${"  ".repeat(node.depth)}[${node.timeLabel ?: "Seq"}] ${node.name} | Done: ${node.isCompleted} | Fields: $nodeFieldsLog")
+                        }
+                    }
+                    Log.d("TODAY_DEBUG", "-------------------------------------")
+
                     _uiState.update { state ->
                         state.copy(
                             timelineEntries = entries,
@@ -184,17 +205,30 @@ class TodayViewModel @Inject constructor(
 
             val globalSchedule =
                 schedules.find { it.templateId == templateId && it.weekday == weekday }
-            val timeDisplay = when (template.timeMode) {
-                TimeMode.FIXED_START -> globalSchedule?.startTime ?: rootNode.scheduledTime
-                ?: "--:--"
+            
+            val earliestChild = resolvedNodes
+                .mapNotNull { node ->
+                    val time = node.timeLabel
+                    if (time != null && time.matches(Regex("\\d{2}:\\d{2}.*"))) {
+                        time.take(5)
+                    } else {
+                        null
+                    }
+                }
+                .minOrNull()
 
-                TimeMode.RANGE -> if (globalSchedule?.startTime != null && globalSchedule.endTime != null)
-                    "${globalSchedule.startTime} - ${globalSchedule.endTime}" else rootNode.scheduledTime
-                    ?: "--:--"
-
-                TimeMode.DURATION -> globalSchedule?.startTime ?: rootNode.scheduledTime ?: "--:--"
-                TimeMode.FLEXIBLE -> "Flexible"
+            val label = when {
+                template.timeMode == TimeMode.FLEXIBLE -> "Flexible"
+                globalSchedule?.startTime != null && globalSchedule.endTime != null -> 
+                    "${globalSchedule.startTime} - ${globalSchedule.endTime}"
+                globalSchedule?.startTime != null -> globalSchedule.startTime
+                rootNode.scheduledTime != null -> rootNode.scheduledTime
+                else -> "--:--"
             }
+
+            val sortTime = globalSchedule?.startTime ?: earliestChild ?: "99:99"
+
+            Log.d("TODAY_DEBUG", "TIME RESOLVE activity=${template.name} mode=${template.timeMode} start=${globalSchedule?.startTime} end=${globalSchedule?.endTime} earliestChild=$earliestChild label=$label sort=$sortTime")
 
             val color = try {
                 Color(template.colorHex.toColorInt())
@@ -206,14 +240,14 @@ class TodayViewModel @Inject constructor(
 
             TimelineEntryUi(
                 id = rootNode.id,
-                time = timeDisplay,
+                time = label,
+                sortTime = sortTime,
                 title = rootNode.name,
                 statusLabel = rootNode.status.name.lowercase(),
                 statusColor = color,
                 barColor = color,
                 fields = rootValues.map { v ->
                     val s = schemas.find { it.id == v.schemaId }
-                    Log.d("TODAY_DEBUG", "NODE FIELD DETAIL node=${rootNode.name} nodeId=${rootNode.id} instanceId=${rootNode.instanceId} templateId=${rootNode.templateId} fieldName=${v.fieldName} schemaId=${v.schemaId} value=${v.value} updatedAt=${v.updatedAt}")
                     ResolvedFieldUi(
                         v.schemaId,
                         v.fieldName,
@@ -224,7 +258,7 @@ class TodayViewModel @Inject constructor(
                 },
                 resolvedNodes = resolvedNodes
             )
-        }.sortedBy { it.time }
+        }.sortedBy { it.sortTime }
     }
 
     private fun resolveNodesRecursive(
@@ -274,7 +308,6 @@ class TodayViewModel @Inject constructor(
                     isCompleted = node.status == NodeStatus.COMPLETED,
                     fields = nodeValues.map { v ->
                         val s = schemas.find { it.id == v.schemaId }
-                        Log.d("TODAY_DEBUG", "NODE FIELD DETAIL node=${node.name} nodeId=${node.id} instanceId=${node.instanceId} templateId=${node.templateId} fieldName=${v.fieldName} schemaId=${v.schemaId} value=${v.value} updatedAt=${v.updatedAt}")
                         ResolvedFieldUi(
                             v.schemaId,
                             v.fieldName,
@@ -302,21 +335,11 @@ class TodayViewModel @Inject constructor(
             val values = fieldValueRepo.getByNodeSync(nodeId)
             if (values.isEmpty()) return@launch
 
-            // Diagnóstico por fieldName
-            values.groupBy { it.fieldName }.forEach { (name, group) ->
-                if (group.size > 1) {
-                    Log.d("TODAY_DEBUG", "FIELD GROUP nodeId=$nodeId fieldName=$name count=${group.size} schemaIds=${group.map { it.schemaId }}")
-                }
-            }
-
             // Limpieza por schemaId
             values.groupBy { it.schemaId }.forEach { (schemaId, group) ->
                 if (group.size > 1) {
                     val sorted = group.sortedByDescending { it.updatedAt }
-                    val kept = sorted.first()
                     val toDelete = sorted.drop(1)
-                    
-                    Log.d("TODAY_DEBUG", "FIELD DEDUPE key=nodeId+schemaId kept=${kept.id} deleted=${toDelete.map { it.id }}")
                     fieldValueRepo.deleteByIds(toDelete.map { it.id })
                 }
             }
@@ -338,11 +361,16 @@ class TodayViewModel @Inject constructor(
 
     private suspend fun generateInstanceIfNeeded(today: Long, weekday: Int) {
         val exceptions = exceptionRepo.getActiveForDate(today).first()
-        if (exceptions.any { it.affectsGeneration }) return
+        if (exceptions.any { it.affectsGeneration }) {
+            Log.d("TODAY_DEBUG", "GENERATE: Generation skipped due to active exception")
+            return
+        }
 
         val activeSchedules = scheduleRepo.getActiveForWeekday(weekday, today).first()
+        Log.d("TODAY_DEBUG", "GENERATE: Found ${activeSchedules.size} active schedules for weekday $weekday")
 
         activeSchedules.forEach { active ->
+            Log.d("TODAY_DEBUG", "GENERATE: Triggering generation for templateId=${active.templateId}")
             instanceRepo.generateInstanceIfNeeded(active.templateId, today)
         }
     }

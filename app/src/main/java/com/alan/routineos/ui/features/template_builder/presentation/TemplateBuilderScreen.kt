@@ -87,9 +87,11 @@ fun TemplateBuilderScreen(
                     selectedMode = uiState.timeMode,
                     startTime = uiState.startTime,
                     endTime = uiState.endTime,
+                    durationMinutes = uiState.durationMinutes,
                     onModeChange = viewModel::updateTimeMode,
                     onStartTimeChange = viewModel::updateStartTime,
-                    onEndTimeChange = viewModel::updateEndTime
+                    onEndTimeChange = viewModel::updateEndTime,
+                    onDurationChange = viewModel::updateDurationMinutes
                 )
             }
 

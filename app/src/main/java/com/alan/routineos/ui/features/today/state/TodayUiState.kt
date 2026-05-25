@@ -14,8 +14,9 @@ data class TodayUiState(
 )
 
 data class TimelineEntryUi(
-    val id: String, // ID del nodo raíz de la instancia
+    val id: String, 
     val time: String,
+    val sortTime: String,
     val title: String,
     val subtitle: String? = null,
     val statusLabel: String,
@@ -32,7 +33,7 @@ data class ResolvedNodeUi(
     val id: String,
     val name: String,
     val depth: Int,
-    val timeLabel: String? = null, // "09:00 - 09:20" o "09:00"
+    val timeLabel: String? = null,
     val isCompleted: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList()
 )

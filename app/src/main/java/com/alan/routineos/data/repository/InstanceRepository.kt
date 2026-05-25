@@ -6,6 +6,7 @@ import com.alan.routineos.data.local.dao.DayInstanceDao
 import com.alan.routineos.data.local.dao.FieldValueDao
 import com.alan.routineos.data.local.dao.NodeDao
 import com.alan.routineos.data.local.dao.NodeScheduleDao
+import com.alan.routineos.data.local.dao.ScheduleDao
 import com.alan.routineos.data.local.entities.DayInstance
 import com.alan.routineos.data.local.entities.InstanceStatus
 import com.alan.routineos.data.local.entities.Node
@@ -24,8 +25,8 @@ class InstanceRepository @Inject constructor(
     private val dayInstanceDao: DayInstanceDao,
     private val nodeDao: NodeDao,
     private val nodeScheduleDao: NodeScheduleDao,
-    private val fieldValueDao: FieldValueDao
-
+    private val fieldValueDao: FieldValueDao,
+    private val scheduleDao: ScheduleDao
 ) {
     private val instanceGenerationMutex = Mutex()
 
@@ -38,9 +39,23 @@ class InstanceRepository @Inject constructor(
     suspend fun generateInstanceIfNeeded(
         templateId: String,
         date: Long
-    ): DayInstance = instanceGenerationMutex.withLock {
+    ): DayInstance? = instanceGenerationMutex.withLock {
+        val weekday = DateUtils.getDayOfWeek(Date(date))
+        val isApplicable = hasApplicableSchedule(templateId, weekday)
+        
+        Log.d("TODAY_DEBUG", "TEMPLATE APPLICABLE TODAY templateId=$templateId today=$weekday result=$isApplicable")
 
         val existing = dayInstanceDao.getByTemplateAndDate(templateId, date)
+
+        if (!isApplicable) {
+            if (existing != null) {
+                Log.d("TODAY_DEBUG", "DELETE NON_APPLICABLE INSTANCE templateId=$templateId date=$date")
+                nodeDao.deleteByInstance(existing.id)
+                dayInstanceDao.deleteById(existing.id)
+            }
+            Log.d("TODAY_DEBUG", "SKIP INSTANCE GENERATION templateId=$templateId reason=no_schedule_today")
+            return@withLock null
+        }
 
         if (existing != null) {
             val nodes = nodeDao.getByInstance(existing.id).first()
@@ -58,18 +73,33 @@ class InstanceRepository @Inject constructor(
             dayInstanceDao.deleteById(existing.id)
         }
 
-        generateInstance(templateId, date)
+        return@withLock generateInstance(templateId, date)
     }
 
     suspend fun regenerateTemplateInstanceForDate(
         templateId: String,
         date: Long
     ) = instanceGenerationMutex.withLock {
-        Log.d("TODAY_DEBUG", "REGENERATE TEMPLATE INSTANCE templateId=$templateId date=$date")
+        val weekday = DateUtils.getDayOfWeek(Date(date))
+        val isApplicable = hasApplicableSchedule(templateId, weekday)
+        
+        Log.d("TODAY_DEBUG", "TEMPLATE APPLICABLE TODAY templateId=$templateId today=$weekday result=$isApplicable")
 
         val oldInstances = dayInstanceDao.getAllByTemplateAndDate(templateId, date)
 
-        Log.d("TODAY_DEBUG", "OLD INSTANCES FOUND = ${oldInstances.size}")
+        if (!isApplicable) {
+            if (oldInstances.isNotEmpty()) {
+                oldInstances.forEach { oldInstance ->
+                    Log.d("TODAY_DEBUG", "DELETE NON_APPLICABLE INSTANCE templateId=$templateId date=$date")
+                    nodeDao.deleteByInstance(oldInstance.id)
+                    dayInstanceDao.deleteById(oldInstance.id)
+                }
+            }
+            Log.d("TODAY_DEBUG", "SKIP REGENERATE templateId=$templateId reason=no_schedule_today")
+            return@withLock
+        }
+
+        Log.d("TODAY_DEBUG", "REGENERATE TEMPLATE INSTANCE templateId=$templateId date=$date")
 
         oldInstances.forEach { oldInstance ->
             Log.d("TODAY_DEBUG", "DELETE OLD INSTANCE id=${oldInstance.id}")
@@ -84,8 +114,25 @@ class InstanceRepository @Inject constructor(
         }
 
         generateInstance(templateId, date)
-
         Log.d("TODAY_DEBUG", "NEW INSTANCE GENERATED templateId=$templateId date=$date")
+    }
+
+    private suspend fun hasApplicableSchedule(templateId: String, todayWeekday: Int): Boolean {
+        // 1. Validar Global Schedules (tabla schedules)
+        val globalSchedules = scheduleDao.getByTemplateSync(templateId)
+        val hasGlobalToday = globalSchedules.any { it.weekday == todayWeekday && it.isActive }
+        if (hasGlobalToday) return true
+
+        // 2. Validar Node Schedules (tabla node_schedules)
+        val templateNodes = nodeDao.getAllByTemplate(templateId)
+        if (templateNodes.isNotEmpty()) {
+            val nodeIds = templateNodes.map { it.id }
+            val nodeSchedules = nodeScheduleDao.getSchedulesForNodes(nodeIds)
+            val hasNodeScheduleToday = nodeSchedules.any { it.dayOfWeek == todayWeekday }
+            if (hasNodeScheduleToday) return true
+        }
+        
+        return false
     }
 
     suspend fun dedupeInstancesForDate(date: Long) = instanceGenerationMutex.withLock {

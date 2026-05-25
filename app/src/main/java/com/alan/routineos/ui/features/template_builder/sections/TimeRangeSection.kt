@@ -7,6 +7,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.Icon
@@ -15,8 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.theme.MetaMono
@@ -29,9 +33,11 @@ fun TimeRangeSection(
     selectedMode: TimeMode,
     startTime: String,
     endTime: String,
+    durationMinutes: Int,
     onModeChange: (TimeMode) -> Unit,
     onStartTimeChange: (String) -> Unit,
-    onEndTimeChange: (String) -> Unit
+    onEndTimeChange: (String) -> Unit,
+    onDurationChange: (Int) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -136,12 +142,34 @@ fun TimeRangeSection(
                             onClick = { showPicker(startTime, onStartTimeChange) }
                         )
                         Spacer(modifier = Modifier.width(16.dp))
-                        TimeValueDisplay(
-                            label = "TIENE UNA DURACIÓN DE", 
-                            value = "1h", 
-                            modifier = Modifier.weight(1f),
-                            onClick = { /* Implementar duración si es necesario */ }
-                        )
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("DURACIÓN (MIN)", style = MetaMono.copy(fontSize = 8.sp), color = ColorTextDim)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Color(0xFF1E1E1E), RoundedCornerShape(10.dp))
+                                    .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
+                                BasicTextField(
+                                    value = durationMinutes.toString(),
+                                    onValueChange = { 
+                                        it.toIntOrNull()?.let { mins -> onDurationChange(mins) }
+                                    },
+                                    textStyle = TitleNode.copy(fontSize = 16.sp, letterSpacing = 1.sp, color = Color.White),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    cursorBrush = SolidColor(Color.White),
+                                    decorationBox = { innerTextField ->
+                                        if (durationMinutes == 0) {
+                                            Text("0", style = TitleNode.copy(fontSize = 16.sp, color = Color(0xFF444444)))
+                                        }
+                                        innerTextField()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
                 TimeMode.FLEXIBLE -> {
