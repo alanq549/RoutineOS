@@ -10,11 +10,15 @@ import javax.inject.Singleton
 class NodeTypeRepository @Inject constructor(
     private val nodeTypeDao: NodeTypeDao
 ) {
-    fun getAll(): Flow<List<NodeType>> = nodeTypeDao.getAll()
+    fun getAllActive(): Flow<List<NodeType>> = nodeTypeDao.getAllActive()
     
     suspend fun getById(id: String): NodeType? = nodeTypeDao.getById(id)
     
     suspend fun upsert(nodeType: NodeType) = nodeTypeDao.upsert(nodeType)
     
-    suspend fun delete(nodeType: NodeType) = nodeTypeDao.delete(nodeType)
+    suspend fun archive(nodeType: NodeType) {
+        nodeTypeDao.upsert(nodeType.copy(isActive = false, updatedAt = System.currentTimeMillis()))
+    }
+
+    suspend fun deletePhysical(nodeType: NodeType) = nodeTypeDao.delete(nodeType)
 }

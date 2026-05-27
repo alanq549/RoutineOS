@@ -14,6 +14,7 @@ import com.alan.routineos.data.local.entities.NodeType
 import com.alan.routineos.ui.features.template_builder.components.AddDashedButton
 import com.alan.routineos.ui.features.template_builder.components.NodeItem
 import com.alan.routineos.ui.features.template_builder.components.SectionHeader
+import com.alan.routineos.core.util.ScheduleResolver
 
 fun LazyListScope.nodeStructureSection(
     nodes: List<Node>,
@@ -25,15 +26,24 @@ fun LazyListScope.nodeStructureSection(
     onUpdateNodeName: (nodeId: String, name: String) -> Unit,
     onUpdateNodeType: (nodeId: String, typeId: String) -> Unit,
     onUpdateFieldValue: (nodeId: String, schemaId: String, fieldName: String, value: String) -> Unit,
+    onAddNodeFull: (name: String, typeId: String, parentId: String?) -> Unit = { _, _, _ -> },
     onDeleteNode: (nodeId: String) -> Unit,
-    onScheduleClick: (Node) -> Unit
+    onScheduleClick: (Node) -> Unit,
+    onManageDetailsClick: () -> Unit
 ) {
     item {
         SectionHeader(
-            title = "BLOQUES DE ACTIVIDAD", 
+            title = "PASOS DE LA ACTIVIDAD", 
             onAdd = { onAddNode(null) },
-            addLabel = "+ bloque"
+            addLabel = "+ paso"
         )
+        
+        AddDashedButton(
+            text = "configurar detalles de los pasos",
+            onClick = onManageDetailsClick
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
     }
 
     val rootNodes = nodes.filter { it.parentId == null }
@@ -51,13 +61,14 @@ fun LazyListScope.nodeStructureSection(
             onUpdateType = onUpdateNodeType,
             onUpdateFieldValue = onUpdateFieldValue,
             onDeleteNode = onDeleteNode,
-            onScheduleClick = onScheduleClick
+            onScheduleClick = onScheduleClick,
+            onManageDetailsClick = onManageDetailsClick
         )
     }
 
     item {
         Spacer(modifier = Modifier.height(12.dp))
-        AddDashedButton(text = "agregar nuevo bloque principal", onClick = { onAddNode(null) })
+        AddDashedButton(text = "agregar paso principal", onClick = { onAddNode(null) })
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
@@ -76,18 +87,33 @@ private fun NodeHierarchy(
     onUpdateType: (String, String) -> Unit,
     onUpdateFieldValue: (String, String, String, String) -> Unit,
     onDeleteNode: (String) -> Unit,
-    onScheduleClick: (Node) -> Unit
+    onScheduleClick: (Node) -> Unit,
+    onManageDetailsClick: () -> Unit
 ) {
     val children = allNodes.filter { it.parentId == node.id }
     val schedules = nodeSchedules[node.id] ?: emptyList()
     val values = fieldValues[node.id] ?: emptyList()
     val schemas = metadataSchemas[node.typeId] ?: emptyList()
+
+    val effectiveSchedules = ScheduleResolver.resolveEffectiveSchedules(node.id, allNodes, nodeSchedules)
+    val hasOwnSchedule = schedules.isNotEmpty()
+    val isInherited = !hasOwnSchedule && effectiveSchedules.isNotEmpty()
+    
+    val parentId = node.parentId
+    val isOutside = if (hasOwnSchedule && parentId != null) {
+        val parentEffective = ScheduleResolver.resolveEffectiveSchedules(parentId, allNodes, nodeSchedules)
+        ScheduleResolver.isOutsideRange(schedules, parentEffective)
+    } else {
+        false
+    }
     
     NodeItem(
         name = node.name,
         onNameChange = { newName: String -> onUpdateName(node.id, newName) },
         depth = depth,
-        hasSchedules = schedules.isNotEmpty(),
+        hasSchedules = hasOwnSchedule,
+        isInherited = isInherited,
+        isOutsideRange = isOutside,
         nodeTypes = nodeTypes,
         selectedTypeId = node.typeId,
         onTypeChange = { newTypeId: String -> onUpdateType(node.id, newTypeId) },
@@ -98,9 +124,25 @@ private fun NodeHierarchy(
         },
         onAddClick = { onAddChild(node.id) },
         onDeleteClick = { onDeleteNode(node.id) },
-        onScheduleClick = { onScheduleClick(node) }
+        onScheduleClick = { onScheduleClick(node) },
+        onManageDetailsClick = onManageDetailsClick
     )
     children.forEach { child ->
-        NodeHierarchy(child, allNodes, nodeSchedules, fieldValues, nodeTypes, metadataSchemas, depth + 1, onAddChild, onUpdateName, onUpdateType, onUpdateFieldValue, onDeleteNode, onScheduleClick)
+        NodeHierarchy(
+            node = child,
+            allNodes = allNodes,
+            nodeSchedules = nodeSchedules,
+            fieldValues = fieldValues,
+            nodeTypes = nodeTypes,
+            metadataSchemas = metadataSchemas,
+            depth = depth + 1,
+            onAddChild = onAddChild,
+            onUpdateName = onUpdateName,
+            onUpdateType = onUpdateType,
+            onUpdateFieldValue = onUpdateFieldValue,
+            onDeleteNode = onDeleteNode,
+            onScheduleClick = onScheduleClick,
+            onManageDetailsClick = onManageDetailsClick
+        )
     }
 }

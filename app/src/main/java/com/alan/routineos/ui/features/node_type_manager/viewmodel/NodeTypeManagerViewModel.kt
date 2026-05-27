@@ -30,7 +30,7 @@ class NodeTypeManagerViewModel @Inject constructor(
 
     private fun loadNodeTypes() {
         viewModelScope.launch {
-            nodeTypeRepo.getAll().collect { types ->
+            nodeTypeRepo.getAllActive().collect { types ->
                 _uiState.update { it.copy(nodeTypes = types, isLoading = false) }
             }
         }
@@ -63,7 +63,11 @@ class NodeTypeManagerViewModel @Inject constructor(
 
     fun deleteNodeType(type: NodeType) {
         viewModelScope.launch {
-            nodeTypeRepo.delete(type)
+            // Soft delete: Archive the type instead of physical deletion
+            nodeTypeRepo.archive(type)
+            if (_uiState.value.selectedType?.id == type.id) {
+                selectType(null)
+            }
         }
     }
 

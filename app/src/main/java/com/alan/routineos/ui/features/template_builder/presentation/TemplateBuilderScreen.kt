@@ -24,6 +24,7 @@ import com.alan.routineos.ui.theme.TitleNode
 import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.ColorBg
 import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.core.util.ScheduleResolver
 
 @Composable
 fun TemplateBuilderScreen(
@@ -69,7 +70,7 @@ fun TemplateBuilderScreen(
                 )
             }
 
-            // 0. QUICK START (Presets)
+            // 2. QUICK START (Presets)
             if (uiState.templateId == null && uiState.name.isBlank()) {
                 item {
                     QuickPresetsSection(onSelect = { preset ->
@@ -81,7 +82,7 @@ fun TemplateBuilderScreen(
                 }
             }
 
-            // 2. TEMPORAL: ¿CUÁNDO OCURRE?
+            // 3. TEMPORAL: ¿CUÁNDO OCURRE?
             item {
                 TimeRangeSection(
                     selectedMode = uiState.timeMode,
@@ -95,7 +96,7 @@ fun TemplateBuilderScreen(
                 )
             }
 
-            // 3. RECURRENCE: ¿QUÉ DÍAS SE REPITE?
+            // 4. RECURRENCE: ¿QUÉ DÍAS SE REPITE?
             item {
                 RepeatSection(
                     selectedDays = uiState.selectedDays,
@@ -103,7 +104,7 @@ fun TemplateBuilderScreen(
                 )
             }
 
-            // 4. ESTRUCTURA INTERNA
+            // 5. ESTRUCTURA INTERNA (PASOS)
             if (!showStructure && uiState.nodes.isEmpty()) {
                 item {
                     Box(
@@ -116,7 +117,7 @@ fun TemplateBuilderScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "¿DIVIDIR EN BLOQUES O PASOS?",
+                            "Agregar pasos a esta actividad",
                             style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
                             color = ColorExec
                         )
@@ -136,37 +137,20 @@ fun TemplateBuilderScreen(
                     onUpdateNodeType = viewModel::updateNodeType,
                     onUpdateFieldValue = viewModel::updateFieldValue,
                     onDeleteNode = viewModel::deleteNode,
-                    onScheduleClick = { selectedNodeForSchedule = it }
+                    onScheduleClick = { selectedNodeForSchedule = it },
+                    onManageDetailsClick = onNavigateToTypeManager
                 )
             }
 
-            // 5. APARIENCIA
+            // 6. APARIENCIA
             item {
-                AdvancedSection(title = "APARIENCIA Y DETALLES") {
+                AdvancedSection(title = "APARIENCIA") {
                     Column(modifier = Modifier.padding(bottom = 24.dp)) {
                         ColorSection(
                             selectedColorHex = uiState.colorHex,
                             colors = colors,
                             onColorChange = viewModel::updateColor
                         )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp)
-                                .clickable { onNavigateToTypeManager() }
-                                .background(ColorSurface, RoundedCornerShape(8.dp))
-                                .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
-                                .padding(12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "GESTIONAR MOLDES DE DATOS",
-                                style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
-                                color = ColorExec
-                            )
-                        }
                     }
                 }
             }
@@ -177,15 +161,27 @@ fun TemplateBuilderScreen(
         }
 
         if (selectedNodeForSchedule != null) {
+            val selectedNode = selectedNodeForSchedule!!
+            val ownSchedules = uiState.nodeSchedules[selectedNode.id].orEmpty()
+            val inheritedSchedules = ScheduleResolver.resolveInheritedSchedules(
+                node = selectedNode,
+                allNodes = uiState.nodes,
+                nodeSchedules = uiState.nodeSchedules
+            )
+
+            val schedulesForSheet = if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
+            val isUsingInheritedSchedule = ownSchedules.isEmpty() && inheritedSchedules.isNotEmpty()
+
             NodeScheduleSheet(
-                node = selectedNodeForSchedule!!,
-                currentSchedules = uiState.nodeSchedules[selectedNodeForSchedule!!.id] ?: emptyList(),
+                node = selectedNode,
+                currentSchedules = schedulesForSheet,
+                isUsingInheritedSchedule = isUsingInheritedSchedule,
                 onDismiss = { selectedNodeForSchedule = null },
                 onToggleSequential = { isSequential ->
-                    viewModel.toggleNodeSequential(selectedNodeForSchedule!!.id, isSequential)
+                    viewModel.toggleNodeSequential(selectedNode.id, isSequential)
                 },
                 onSave = { schedules ->
-                    viewModel.updateNodeSchedules(selectedNodeForSchedule!!.id, schedules)
+                    viewModel.updateNodeSchedules(selectedNode.id, schedules)
                     selectedNodeForSchedule = null
                 }
             )

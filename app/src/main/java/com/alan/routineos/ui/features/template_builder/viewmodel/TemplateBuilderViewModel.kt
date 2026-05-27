@@ -64,7 +64,8 @@ class TemplateBuilderViewModel @Inject constructor(
 
     private fun loadData() {
         viewModelScope.launch {
-            val types = typeRepo.getAll().first()
+            // Soft delete: Use getAllActive to hide archived types
+            val types = typeRepo.getAllActive().first()
             val schemasMap = types.associate { it.id to schemaRepo.getByTypeId(it.id).first() }
             _uiState.update { it.copy(nodeTypes = types, metadataSchemas = schemasMap) }
 

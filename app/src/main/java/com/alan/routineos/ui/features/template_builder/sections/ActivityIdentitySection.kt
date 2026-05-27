@@ -26,7 +26,7 @@ fun ActivityIdentitySection(
 ) {
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp)) {
         Text(
-            "¿QUÉ VAMOS A ORGANIZAR?",
+            "LO PRIMERO, EL PROPÓSITO",
             style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
             color = ColorTextDim
         )
@@ -36,11 +36,18 @@ fun ActivityIdentitySection(
         BuilderTextField(
             value = name,
             onValueChange = onNameChange,
-            placeholder = "Ej. Push Day, Semestre 8, Meditación...",
+            placeholder = "Dale un nombre a este espacio...",
             isFocused = name.isEmpty()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        Text(
+            "¿DÓNDE ENCAJA ESTO EN TU VIDA?",
+            style = MetaMono.copy(fontSize = 8.sp, letterSpacing = 1.sp),
+            color = ColorTextDim,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
 
         ContextGrid(
             selected = selectedCategory,
@@ -80,7 +87,7 @@ private fun ContextGrid(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = category.label,
+                            text = category.label.uppercase(),
                             style = MetaMono.copy(
                                 fontSize = 9.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal

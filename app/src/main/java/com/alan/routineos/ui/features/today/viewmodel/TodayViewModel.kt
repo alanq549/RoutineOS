@@ -6,6 +6,7 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
+import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeFieldValue
@@ -186,6 +187,7 @@ class TodayViewModel @Inject constructor(
 
         val allNodes = nodesWithId.map { it.first }
         val rootNodesWithTemplate = nodesWithId.filter { it.first.parentId == null }
+        val nodeSchedulesMap = nodeSchedules.groupBy { it.nodeId }
 
         return rootNodesWithTemplate.mapNotNull { (rootNode, templateId) ->
             val template = templates.find { it.id == templateId } ?: return@mapNotNull null
@@ -193,18 +195,19 @@ class TodayViewModel @Inject constructor(
             // LIMPIEZA AUTOMÁTICA (Fase 3.1)
             dedupeFieldValuesForNode(rootNode.id)
 
+            val globalSchedule =
+                schedules.find { it.templateId == templateId && it.weekday == weekday }
+
             val resolvedNodes = resolveNodesRecursive(
                 parentId = rootNode.id,
                 allNodes = allNodes,
-                nodeSchedules = nodeSchedules,
+                nodeSchedulesMap = nodeSchedulesMap,
                 fieldValues = fieldValues,
                 schemas = schemas,
                 depth = 1,
-                todayWeekday = weekday
+                todayWeekday = weekday,
+                globalTemplateSchedule = globalSchedule
             )
-
-            val globalSchedule =
-                schedules.find { it.templateId == templateId && it.weekday == weekday }
             
             val earliestChild = resolvedNodes
                 .mapNotNull { node ->
@@ -264,11 +267,12 @@ class TodayViewModel @Inject constructor(
     private fun resolveNodesRecursive(
         parentId: String,
         allNodes: List<Node>,
-        nodeSchedules: List<NodeSchedule>,
+        nodeSchedulesMap: Map<String, List<NodeSchedule>>,
         fieldValues: List<NodeFieldValue>,
         schemas: List<NodeMetadataSchema>,
         depth: Int,
-        todayWeekday: Int
+        todayWeekday: Int,
+        globalTemplateSchedule: Schedule? = null
     ): List<ResolvedNodeUi> {
         return allNodes
             .filter { it.parentId == parentId }
@@ -277,17 +281,15 @@ class TodayViewModel @Inject constructor(
                 // LIMPIEZA AUTOMÁTICA (Fase 3.1)
                 dedupeFieldValuesForNode(node.id)
 
-                val schedules = nodeSchedules.filter {
-                    it.nodeId == node.id || it.nodeId == node.templateId
-                }
-                val todaySchedule = schedules.find { it.dayOfWeek == todayWeekday }
+                val effectiveSchedules = ScheduleResolver.resolveEffectiveSchedules(node.id, allNodes, nodeSchedulesMap)
+                val todaySchedule = effectiveSchedules.find { it.dayOfWeek == todayWeekday }
 
                 val dayFromName = nodeDayFromName(node.name)
                 if (dayFromName != null && dayFromName != todayWeekday) {
                     return@flatMap emptyList<ResolvedNodeUi>()
                 }
 
-                if (schedules.isNotEmpty() && todaySchedule == null) {
+                if (effectiveSchedules.isNotEmpty() && todaySchedule == null) {
                     return@flatMap emptyList<ResolvedNodeUi>()
                 }
 
@@ -297,7 +299,20 @@ class TodayViewModel @Inject constructor(
                     } else {
                         it.startTime
                     }
-                } ?: node.scheduledTime
+                } ?: run {
+                    // Rule 4 Fallback: Template global schedule
+                    if (globalTemplateSchedule != null) {
+                        val start = globalTemplateSchedule.startTime
+                        val end = globalTemplateSchedule.endTime
+                        if (start != null && end != null && start != end) {
+                            "$start - $end"
+                        } else {
+                            start ?: node.scheduledTime
+                        }
+                    } else {
+                        node.scheduledTime
+                    }
+                }
 
                 val nodeValues = fieldValues.filter { it.nodeId == node.id }
                 val resolvedNode = ResolvedNodeUi(
@@ -321,11 +336,12 @@ class TodayViewModel @Inject constructor(
                 listOf(resolvedNode) + resolveNodesRecursive(
                     node.id,
                     allNodes,
-                    nodeSchedules,
+                    nodeSchedulesMap,
                     fieldValues,
                     schemas,
                     depth + 1,
-                    todayWeekday
+                    todayWeekday,
+                    globalTemplateSchedule
                 )
             }
     }

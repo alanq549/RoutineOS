@@ -4,7 +4,17 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,8 +22,22 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,7 +46,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.node_type_manager.components.schema.ManagerTextField
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorPlan
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.TitleNode
 
 @Composable
 fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
@@ -31,17 +62,6 @@ fun SearchBar(query: String, onQueryChange: (String) -> Unit) {
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = if (query.isEmpty()) "Buscar actividad..." else query,
-                style = TitleNode.copy(fontSize = 14.sp),
-                color = if (query.isEmpty()) ColorTextDim else ColorText,
-                modifier = Modifier.weight(1f)
-            )
-        }
     }
 }
 
@@ -89,10 +109,15 @@ fun TemplateCard(
                     color = ColorText,
                     modifier = Modifier.weight(1f)
                 )
-                
+
                 Box {
                     IconButton(onClick = { showMenu = true }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.MoreVert, null, tint = ColorTextDim, modifier = Modifier.size(20.dp))
+                        Icon(
+                            Icons.Default.MoreVert,
+                            null,
+                            tint = ColorTextDim,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                     DropdownMenu(
                         expanded = showMenu,
@@ -104,7 +129,13 @@ fun TemplateCard(
                                 showMenu = false
                                 onEdit()
                             },
-                            leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp)) }
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Edit,
+                                    null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Eliminar", color = Color.Red, style = MetaMono) },
@@ -112,7 +143,14 @@ fun TemplateCard(
                                 showMenu = false
                                 onDelete()
                             },
-                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color.Red, modifier = Modifier.size(18.dp)) }
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    null,
+                                    tint = Color.Red,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         )
                     }
                 }
@@ -213,8 +251,14 @@ fun QuickCreateSheet(
         containerColor = ColorSurface,
         dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
-        Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 40.dp)) {
-            Text("¿QUÉ VAMOS A ORGANIZAR?", style = MetaMono.copy(fontSize = 10.sp), color = ColorTextDim)
+        Column(modifier = Modifier
+            .padding(horizontal = 24.dp)
+            .padding(bottom = 40.dp)) {
+            Text(
+                "¿QUÉ VAMOS A ORGANIZAR?",
+                style = MetaMono.copy(fontSize = 10.sp),
+                color = ColorTextDim
+            )
             Spacer(modifier = Modifier.height(16.dp))
             ManagerTextField(
                 value = name,
@@ -225,7 +269,9 @@ fun QuickCreateSheet(
             Spacer(modifier = Modifier.height(32.dp))
             Button(
                 onClick = { onCreate(name, "#2196F3") },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                 shape = RoundedCornerShape(12.dp),
                 enabled = name.isNotBlank()

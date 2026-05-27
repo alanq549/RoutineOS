@@ -42,7 +42,12 @@ fun OnboardingScreen(
             Box(modifier = Modifier.weight(1f)) {
                 AnimatedContent(targetState = uiState.currentStep, label = "step") { step ->
                     when (step) {
-                        1 -> StepRoutineName(uiState.routineName, viewModel::updateRoutineName)
+                        1 -> StepRoutineName(
+                            name = uiState.routineName,
+                            selectedCategory = uiState.category,
+                            onNameChange = viewModel::updateRoutineName,
+                            onCategoryChange = viewModel::updateCategory
+                        )
                         2 -> StepNodeTypes(
                             nodeTypes = uiState.nodeTypes,
                             onAdd = viewModel::addNodeType,
@@ -55,8 +60,10 @@ fun OnboardingScreen(
                         4 -> StepSchedule(
                             selectedDays = uiState.selectedDays,
                             startTime = uiState.startTime,
+                            endTime = uiState.endTime,
                             onToggleDay = viewModel::toggleDay,
-                            onTimeChange = viewModel::updateStartTime
+                            onStartTimeChange = viewModel::updateStartTime,
+                            onEndTimeChange = viewModel::updateEndTime
                         )
                     }
                 }
@@ -78,11 +85,13 @@ fun OnboardingScreen(
                 enabled = when(uiState.currentStep) {
                     1 -> uiState.routineName.isNotBlank()
                     2 -> uiState.nodeTypes.isNotEmpty()
+                    4 -> uiState.isTimeValid && uiState.selectedDays.isNotEmpty()
                     else -> true
                 }
             ) {
+                val buttonText = if (uiState.currentStep < 4) "Siguiente paso" else "Comenzar mi viaje"
                 Text(
-                    text = if (uiState.currentStep < 4) "Continuar" else "Crear mi primera rutina",
+                    text = buttonText,
                     style = TitleNode.copy(color = Color.White)
                 )
             }

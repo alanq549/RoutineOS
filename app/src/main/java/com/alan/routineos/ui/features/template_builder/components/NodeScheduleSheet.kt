@@ -41,6 +41,7 @@ private data class ScheduleGroupUi(
 fun NodeScheduleSheet(
     node: Node,
     currentSchedules: List<NodeSchedule>,
+    isUsingInheritedSchedule: Boolean = false,
     onDismiss: () -> Unit,
     onToggleSequential: (Boolean) -> Unit,
     onSave: (List<NodeSchedule>) -> Unit
@@ -79,6 +80,15 @@ fun NodeScheduleSheet(
                 style = MetaMono.copy(fontSize = 10.sp, letterSpacing = 1.sp),
                 color = Color.White
             )
+
+            if (isUsingInheritedSchedule) {
+                Text(
+                    text = "Usando horario del paso superior como base",
+                    style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                    color = ColorExec.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
             
             Spacer(modifier = Modifier.height(20.dp))
 
