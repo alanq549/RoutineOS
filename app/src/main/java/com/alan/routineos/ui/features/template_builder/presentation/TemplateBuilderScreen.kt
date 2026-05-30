@@ -3,28 +3,52 @@ package com.alan.routineos.ui.features.template_builder.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.runtime.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSheet
-import com.alan.routineos.ui.features.template_builder.sections.*
+import com.alan.routineos.ui.features.template_builder.sections.ActivityIdentitySection
+import com.alan.routineos.ui.features.template_builder.sections.AdvancedSection
+import com.alan.routineos.ui.features.template_builder.sections.ColorSection
+import com.alan.routineos.ui.features.template_builder.sections.QuickPresetsSection
+import com.alan.routineos.ui.features.template_builder.sections.RepeatSection
+import com.alan.routineos.ui.features.template_builder.sections.TimeRangeSection
+import com.alan.routineos.ui.features.template_builder.sections.nodeStructureSection
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
-import com.alan.routineos.ui.theme.TitleNode
-import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.core.util.ScheduleResolver
+import com.alan.routineos.ui.theme.TitleNode
 
 @Composable
 fun TemplateBuilderScreen(
@@ -34,7 +58,7 @@ fun TemplateBuilderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedNodeForSchedule by remember { mutableStateOf<Node?>(null) }
-    var showStructure by remember { mutableStateOf(false) } 
+    var showStructure by remember { mutableStateOf(false) }
 
     val colors = listOf(
         Color(0xFFF44336), Color(0xFFFF9800), Color(0xFFFFC107),
@@ -68,6 +92,24 @@ fun TemplateBuilderScreen(
                     selectedCategory = uiState.category,
                     onCategoryChange = viewModel::updateCategory
                 )
+            }
+
+
+            // 6. APARIENCIA
+            item {
+                AdvancedSection(title = "APARIENCIA") {
+                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
+                        ColorSection(
+                            selectedColorHex = uiState.colorHex,
+                            colors = colors,
+                            onColorChange = viewModel::updateColor
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(48.dp))
             }
 
             // 2. QUICK START (Presets)
@@ -130,8 +172,8 @@ fun TemplateBuilderScreen(
                     fieldValues = uiState.fieldValues,
                     nodeTypes = uiState.nodeTypes,
                     metadataSchemas = uiState.metadataSchemas,
-                    onAddNode = { parentId -> 
-                        viewModel.addNode("", "default", parentId) 
+                    onAddNode = { parentId ->
+                        viewModel.addNode("", "default", parentId)
                     },
                     onUpdateNodeName = viewModel::updateNodeName,
                     onUpdateNodeType = viewModel::updateNodeType,
@@ -142,22 +184,6 @@ fun TemplateBuilderScreen(
                 )
             }
 
-            // 6. APARIENCIA
-            item {
-                AdvancedSection(title = "APARIENCIA") {
-                    Column(modifier = Modifier.padding(bottom = 24.dp)) {
-                        ColorSection(
-                            selectedColorHex = uiState.colorHex,
-                            colors = colors,
-                            onColorChange = viewModel::updateColor
-                        )
-                    }
-                }
-            }
-            
-            item {
-                Spacer(modifier = Modifier.height(48.dp))
-            }
         }
 
         if (selectedNodeForSchedule != null) {
@@ -169,7 +195,8 @@ fun TemplateBuilderScreen(
                 nodeSchedules = uiState.nodeSchedules
             )
 
-            val schedulesForSheet = if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
+            val schedulesForSheet =
+                if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
             val isUsingInheritedSchedule = ownSchedules.isEmpty() && inheritedSchedules.isNotEmpty()
 
             NodeScheduleSheet(
@@ -219,13 +246,13 @@ private fun TemplateBuilderTopBar(
                 modifier = Modifier.size(16.dp)
             )
         }
-        
+
         Text(
             text = if (isNewTemplate) "NUEVA ACTIVIDAD" else "EDITAR ACTIVIDAD",
             style = TitleNode.copy(fontSize = 11.sp, letterSpacing = 1.2.sp),
             color = Color.White
         )
-        
+
         Surface(
             onClick = onSave,
             color = if (canSave) ColorExec else Color(0xFF1A1A1A),
