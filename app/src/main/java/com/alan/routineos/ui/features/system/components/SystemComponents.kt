@@ -6,56 +6,19 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoMode
-import androidx.compose.material.icons.filled.BeachAccess
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Celebration
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.EditAttributes
-import androidx.compose.material.icons.filled.Nightlight
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Sick
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,30 +27,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.alan.routineos.ui.theme.ColorBg
-import com.alan.routineos.ui.theme.ColorBorder
-import com.alan.routineos.ui.theme.ColorExec
-import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.ui.theme.ColorText
-import com.alan.routineos.ui.theme.ColorTextDim
-import com.alan.routineos.ui.theme.ColorTextMuted
-import com.alan.routineos.ui.theme.MetaMono
-import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.core.util.DateUtils
+import com.alan.routineos.ui.theme.*
+import java.util.Date
 
 /**
  * REDESIGNED SYSTEM COMPONENTS — INTENTION-FIRST UX
- * A single reactive sheet replaces the multi-step wizard.
+ * Human-centric adaptations replace technical configurations.
  */
 
-enum class AdjustmentType { CANCEL_DAY, VACATION, RESCHEDULE }
+enum class AdaptationType { CANCEL_DAY, VACATION, RESCHEDULE, REDUCED, SPECIAL }
 
-enum class AdjustmentIntention(val label: String, val icon: ImageVector) {
+enum class AdaptationIntention(val label: String, val icon: ImageVector) {
     VACATION("Vacaciones", Icons.Default.BeachAccess),
-    DAY_OFF("Día libre", Icons.Default.Nightlight),
-    SICKNESS("Enfermedad", Icons.Default.Sick),
-    EXAM("Examen", Icons.Default.School),
-    EVENT("Evento", Icons.Default.Celebration),
-    CUSTOM("Otro", Icons.Default.Tune)
+    CANCEL_DAY("Día cancelado", Icons.Default.EventBusy),
+    SPECIAL_WEEK("Semana especial", Icons.Default.Star),
+    RESCHEDULE("Reprogramar", Icons.Default.History),
+    REDUCED("Rutina reducida", Icons.Default.ReduceCapacity),
+    LIGHT_DAY("Día ligero", Icons.Default.LightMode),
+    SUNDAY_MODE("Modo domingo", Icons.Default.Nightlight),
+    EXAMS("Semana de exámenes", Icons.Default.School)
 }
 
 enum class AdjustmentStrategy(val label: String, val description: String, val icon: ImageVector) {
@@ -98,22 +57,26 @@ enum class AdjustmentStrategy(val label: String, val description: String, val ic
 }
 
 @Composable
-fun AdjustmentCard(
+fun AdaptationCard(
     dateRange: String,
     title: String,
-    type: AdjustmentType,
+    type: AdaptationType,
     onDelete: () -> Unit
 ) {
     val barColor = when (type) {
-        AdjustmentType.CANCEL_DAY -> Color(0xFFEF5350)
-        AdjustmentType.VACATION -> Color(0xFFFF9800)
-        AdjustmentType.RESCHEDULE -> Color(0xFF1565C0)
+        AdaptationType.CANCEL_DAY -> Color(0xFFEF5350)
+        AdaptationType.VACATION -> Color(0xFFFF9800)
+        AdaptationType.RESCHEDULE -> Color(0xFF1565C0)
+        AdaptationType.REDUCED -> Color(0xFFAB47BC)
+        AdaptationType.SPECIAL -> Color(0xFF26A69A)
     }
 
     val label = when (type) {
-        AdjustmentType.CANCEL_DAY -> "Cancelado"
-        AdjustmentType.VACATION -> "Vacaciones"
-        AdjustmentType.RESCHEDULE -> "Reprogramado"
+        AdaptationType.CANCEL_DAY -> "Cancelado"
+        AdaptationType.VACATION -> "Vacaciones"
+        AdaptationType.RESCHEDULE -> "Reprogramado"
+        AdaptationType.REDUCED -> "Reducida"
+        AdaptationType.SPECIAL -> "Especial"
     }
 
     Surface(
@@ -173,13 +136,13 @@ fun AdjustmentCard(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun NewAdjustmentSheet(
+fun NewAdaptationSheet(
     onDismiss: () -> Unit,
-    onConfirm: (title: String) -> Unit
+    onConfirm: (label: String, type: String, rangeType: Int) -> Unit
 ) {
-    var intention by remember { mutableStateOf<AdjustmentIntention?>(null) }
+    var intention by remember { mutableStateOf<AdaptationIntention?>(null) }
     var strategy by remember { mutableStateOf(AdjustmentStrategy.PAUSE_ALL) }
-    var isRange by remember { mutableStateOf(false) }
+    var rangeType by remember { mutableIntStateOf(0) } // 0: Only this day, 1: All week, 2: Custom
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -194,7 +157,7 @@ fun NewAdjustmentSheet(
                 .padding(bottom = 48.dp)
         ) {
             Text(
-                text = "¿Qué está pasando?",
+                text = "¿Qué adaptación necesitas?",
                 style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
                 color = ColorText
             )
@@ -207,7 +170,7 @@ fun NewAdjustmentSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                AdjustmentIntention.entries.forEach { item ->
+                AdaptationIntention.entries.forEach { item ->
                     val isSelected = intention == item
                     IntentionChip(
                         item = item,
@@ -240,22 +203,19 @@ fun NewAdjustmentSheet(
                             .padding(4.dp),
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        DateModeButton("Solo un día", !isRange, Modifier.weight(1f)) {
-                            isRange = false
+                        DateModeButton("Solo este día", rangeType == 0, Modifier.weight(1f)) {
+                            rangeType = 0
                         }
-                        DateModeButton("Varios días", isRange, Modifier.weight(1f)) {
-                            isRange = true
+                        DateModeButton("Toda esta semana", rangeType == 1, Modifier.weight(1f)) {
+                            rangeType = 1
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    DatePickerTrigger(if (isRange) "19 - 23 de mayo" else "Lunes, 12 de mayo")
 
                     Spacer(modifier = Modifier.height(32.dp))
 
                     // 3. Strategy Selector
                     Text(
-                        text = "¿Cómo quieres manejar esos días?",
+                        text = "¿Cómo quieres adaptar tu rutina?",
                         style = TitleNode.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
                         color = ColorText
                     )
@@ -266,20 +226,6 @@ fun NewAdjustmentSheet(
                         StrategyOption(item, isSelected) { strategy = item }
                     }
 
-                    // 4. Advanced Options (Disclosure)
-                    AnimatedVisibility(visible = strategy == AdjustmentStrategy.MANUAL) {
-                        Column(modifier = Modifier.padding(top = 16.dp)) {
-                            Text(
-                                "CONFIGURACIÓN POR ACTIVIDAD",
-                                style = MetaMono,
-                                color = ColorTextMuted
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            ManualActivityRow("Semestre 8")
-                            ManualActivityRow("Push Day")
-                        }
-                    }
-
                     Spacer(modifier = Modifier.height(32.dp))
 
                     // 5. Reactive Preview
@@ -288,14 +234,16 @@ fun NewAdjustmentSheet(
                     Spacer(modifier = Modifier.height(32.dp))
 
                     Button(
-                        onClick = { onConfirm(intention?.label ?: "Ajuste") },
+                        onClick = { 
+                            onConfirm(intention?.label ?: "Adaptación", intention?.name ?: "CUSTOM", rangeType) 
+                        },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("APLICAR CAMBIOS", style = TitleNode.copy(color = Color.White))
+                        Text("APLICAR ADAPTACIÓN", style = TitleNode.copy(color = Color.White))
                     }
                 }
             }
@@ -305,7 +253,7 @@ fun NewAdjustmentSheet(
 
 @Composable
 private fun IntentionChip(
-    item: AdjustmentIntention,
+    item: AdaptationIntention,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
@@ -365,25 +313,6 @@ private fun DateModeButton(
 }
 
 @Composable
-private fun DatePickerTrigger(value: String) {
-    Surface(
-        color = ColorSurface,
-        shape = RoundedCornerShape(10.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.CalendarToday, null, Modifier.size(14.dp), tint = ColorTextDim)
-            Spacer(Modifier.width(10.dp))
-            Text(value, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
-        }
-    }
-}
-
-@Composable
 private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
@@ -425,52 +354,6 @@ private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClic
 }
 
 @Composable
-private fun ManualActivityRow(name: String) {
-    var selectedAction by remember { mutableIntStateOf(2) } // 0: Cancel, 1: Move, 2: Keep
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(name, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
-
-        Row(
-            modifier = Modifier
-                .background(ColorSurface, RoundedCornerShape(8.dp))
-                .padding(2.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            ActionToggleIcon(Icons.Default.Pause, selectedAction == 0) { selectedAction = 0 }
-            ActionToggleIcon(Icons.Default.Schedule, selectedAction == 1) { selectedAction = 1 }
-            ActionToggleIcon(Icons.Default.Check, selectedAction == 2) { selectedAction = 2 }
-        }
-    }
-}
-
-@Composable
-private fun ActionToggleIcon(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .size(32.dp)
-            .clickable { onClick() },
-        color = if (isSelected) ColorBg else Color.Transparent,
-        shape = RoundedCornerShape(6.dp)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = if (isSelected) ColorExec else ColorTextMuted
-            )
-        }
-    }
-}
-
-@Composable
 private fun ReactivePreviewBox(strategy: AdjustmentStrategy) {
     Surface(
         color = ColorSurface.copy(alpha = 0.5f),
@@ -503,52 +386,84 @@ private fun ReactivePreviewBox(strategy: AdjustmentStrategy) {
 
 @Composable
 fun SystemWeekStrip(
-    selectedDayIndex: Int,
-    onDaySelected: (Int) -> Unit
+    selectedDate: Long,
+    currentWeekStart: Long,
+    onDateSelected: (Long) -> Unit,
+    onNextWeek: () -> Unit,
+    onPrevWeek: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        val weekDays = listOf(
-            "L" to "12", "MA" to "13", "MI" to "14",
-            "J" to "15", "V" to "16", "S" to "17", "D" to "18"
-        )
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onPrevWeek, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = ColorTextDim)
+            }
+            Text(
+                text = DateUtils.formatHeaderMonth(Date(currentWeekStart)),
+                style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 1.sp),
+                color = ColorText
+            )
+            IconButton(onClick = onNextWeek, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = ColorTextDim)
+            }
+        }
 
-        weekDays.forEachIndexed { index, (day, num) ->
-            val isSelected = index == selectedDayIndex
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .width(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(if (isSelected) ColorExec.copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { onDaySelected(index) }
-                    .padding(vertical = 12.dp)
-            ) {
-                Text(
-                    text = day,
-                    style = MetaMono.copy(
-                        fontSize = 9.sp,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                    ),
-                    color = if (isSelected) ColorExec else ColorTextDim
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = num,
-                    style = TitleNode.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
-                    color = if (isSelected) ColorExec else ColorText
-                )
-                if (isSelected) {
-                    Box(
-                        modifier = Modifier
-                            .padding(top = 6.dp)
-                            .size(3.dp)
-                            .background(ColorExec, CircleShape)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val days = DateUtils.getDaysOfWeek(currentWeekStart)
+            val dayLabels = listOf("L", "MA", "MI", "J", "V", "S", "D")
+
+            days.forEachIndexed { index, timestamp ->
+                val isSelected = DateUtils.getStartOfDay(timestamp) == DateUtils.getStartOfDay(selectedDate)
+                val isToday = DateUtils.getStartOfDay(timestamp) == DateUtils.getStartOfDay(System.currentTimeMillis())
+                
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .width(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(if (isSelected) ColorExec.copy(alpha = 0.12f) else Color.Transparent)
+                        .border(
+                            width = if (isToday) 1.dp else 0.dp,
+                            color = if (isToday) ColorExec.copy(alpha = 0.3f) else Color.Transparent,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        .clickable { onDateSelected(timestamp) }
+                        .padding(vertical = 12.dp)
+                ) {
+                    Text(
+                        text = dayLabels[index],
+                        style = MetaMono.copy(
+                            fontSize = 9.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        ),
+                        color = if (isSelected) ColorExec else ColorTextDim
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    val cal = java.util.Calendar.getInstance()
+                    cal.timeInMillis = timestamp
+                    Text(
+                        text = cal.get(java.util.Calendar.DAY_OF_MONTH).toString(),
+                        style = TitleNode.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                        color = if (isSelected) ColorExec else ColorText
+                    )
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .padding(top = 6.dp)
+                                .size(3.dp)
+                                .background(ColorExec, CircleShape)
+                        )
+                    }
                 }
             }
         }

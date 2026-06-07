@@ -10,6 +10,7 @@ import com.alan.routineos.data.local.dao.ScheduleDao
 import com.alan.routineos.data.local.entities.DayInstance
 import com.alan.routineos.data.local.entities.InstanceStatus
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeStatus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -117,6 +118,38 @@ class InstanceRepository @Inject constructor(
         Log.d("TODAY_DEBUG", "NEW INSTANCE GENERATED templateId=$templateId date=$date")
     }
 
+    suspend fun useTemplateForDate(
+        templateId: String,
+        date: Long,
+        forceRegenerate: Boolean = false
+    ): DayInstance? = instanceGenerationMutex.withLock {
+        Log.d("TODAY_DEBUG", "USE TEMPLATE FOR DATE START templateId=$templateId date=$date force=$forceRegenerate")
+
+        val existing = dayInstanceDao.getByTemplateAndDate(templateId, date)
+
+        if (existing != null && !forceRegenerate) {
+            val nodes = nodeDao.getByInstance(existing.id).first()
+            if (nodes.isNotEmpty()) {
+                Log.d("TODAY_DEBUG", "USE TEMPLATE FOR DATE EXISTING FOUND instanceId=${existing.id}")
+                Log.d("TODAY_DEBUG", "USE TEMPLATE FOR DATE SKIPPED existing valid instance")
+                return@withLock existing
+            }
+        }
+
+        if (forceRegenerate || (existing != null)) {
+            val oldInstances = dayInstanceDao.getAllByTemplateAndDate(templateId, date)
+            oldInstances.forEach { oldInstance ->
+                Log.d("TODAY_DEBUG", "USE TEMPLATE FOR DATE DELETE OLD id=${oldInstance.id}")
+                nodeDao.deleteByInstance(oldInstance.id)
+                dayInstanceDao.deleteById(oldInstance.id)
+            }
+        }
+
+        val instance = generateInstance(templateId, date)
+        Log.d("TODAY_DEBUG", "USE TEMPLATE FOR DATE CREATED instanceId=${instance.id}")
+        return@withLock instance
+    }
+
     private suspend fun hasApplicableSchedule(templateId: String, todayWeekday: Int): Boolean {
         // 1. Validar Global Schedules (tabla schedules)
         val globalSchedules = scheduleDao.getByTemplateSync(templateId)
@@ -213,8 +246,11 @@ class InstanceRepository @Inject constructor(
 
         val nodeIds = templateTreeNodes.map { it.id }
         val allSchedules = nodeScheduleDao.getSchedulesForNodes(nodeIds)
+        Log.d("TODAY_DEBUG", "NODE SCHEDULES TEMPLATE FOUND = ${allSchedules.size}")
 
         val instanceNodes = mutableListOf<Node>()
+        val clonedSchedules = mutableListOf<NodeSchedule>()
+
         for (tNode in templateTreeNodes) {
             val newNodeId = idMap[tNode.id]!!
 
@@ -228,14 +264,19 @@ class InstanceRepository @Inject constructor(
             val nodeSchedules = allSchedules.filter { it.nodeId == tNode.id }
             val todaySchedule = nodeSchedules.find { it.dayOfWeek == weekday }
 
-//            nodeSchedules.forEach { s ->
-//                nodeScheduleDao.upsert(
-//                    s.copy(
-//                        id = UUID.randomUUID().toString(),
-//                        nodeId = newNodeId
-//                    )
-//                )
-//            }
+            nodeSchedules.forEach { s ->
+                val cloned = s.copy(
+                    id = UUID.randomUUID().toString(),
+                    nodeId = newNodeId,
+                    createdAt = System.currentTimeMillis(),
+                    updatedAt = System.currentTimeMillis()
+                )
+                clonedSchedules.add(cloned)
+                Log.d(
+                    "TODAY_DEBUG",
+                    "CLONED NODE SCHEDULE oldNode=${s.nodeId} newNode=$newNodeId day=${s.dayOfWeek} start=${s.startTime} end=${s.endTime}"
+                )
+            }
 
             // Copiar FieldValues (Usando fieldValueDao correctamente)
             val templateValues = fieldValueDao.getByNode(tNode.id).first()
@@ -268,6 +309,11 @@ class InstanceRepository @Inject constructor(
 
         nodeDao.insertAll(instanceNodes)
         Log.d("TODAY_DEBUG", "INSTANCE NODES COUNT GENERATED = ${instanceNodes.size}")
+
+        if (clonedSchedules.isNotEmpty()) {
+            nodeScheduleDao.insertAll(clonedSchedules)
+            Log.d("TODAY_DEBUG", "INSTANCE NODE SCHEDULES GENERATED = ${clonedSchedules.size}")
+        }
 
         return newInstance
     }

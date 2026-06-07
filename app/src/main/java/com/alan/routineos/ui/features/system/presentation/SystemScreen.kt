@@ -13,10 +13,14 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.alan.routineos.ui.features.system.tabs.ActivitiesTab
 import com.alan.routineos.ui.features.system.tabs.AdjustmentsTab
+import com.alan.routineos.ui.features.system.viewmodel.SystemViewModel
 import com.alan.routineos.ui.theme.ColorBg
 import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.ColorSurface
@@ -27,8 +31,10 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SystemScreen(
-    onNavigateToBuilder: (String, String?, String?) -> Unit
+    onNavigateToBuilder: (String, String?, String?) -> Unit,
+    viewModel: SystemViewModel = hiltViewModel()
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val pagerState = rememberPagerState(pageCount = { 2 })
     val coroutineScope = rememberCoroutineScope()
 
@@ -48,7 +54,7 @@ fun SystemScreen(
                     }
                 }
             ) {
-                val titles = listOf("ACTIVIDADES", "CONFIGURACIÓN")
+                val titles = listOf("ACTIVIDADES", "ADAPTACIONES")
                 titles.forEachIndexed { index, title ->
                     Tab(
                         selected = pagerState.currentPage == index,
@@ -77,7 +83,14 @@ fun SystemScreen(
         ) { page ->
             when (page) {
                 0 -> ActivitiesTab(onNavigateToBuilder = onNavigateToBuilder)
-                1 -> AdjustmentsTab()
+                1 -> AdjustmentsTab(
+                    state = uiState,
+                    onDateSelected = viewModel::selectDate,
+                    onNextWeek = viewModel::nextWeek,
+                    onPrevWeek = viewModel::prevWeek,
+                    onCreateAdaptation = viewModel::createAdaptation,
+                    onDeleteAdaptation = viewModel::deleteAdaptation
+                )
                 else -> Unit
             }
         }

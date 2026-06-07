@@ -34,14 +34,23 @@ fun TodayActivityCard(
     statusColor: Color,
     barColor: Color,
     isCancelled: Boolean = false,
+    isSkipped: Boolean = false,
     hasConflict: Boolean = false,
+    wasShiftedByDomino: Boolean = false,
+    dominoReason: String? = null,
     resolvedNodes: List<ResolvedNodeUi> = emptyList(),
     onNodeToggle: (String) -> Unit = {},
     onNodeClick: (String) -> Unit = {},
     onComplete: () -> Unit = {},
-    onSkip: () -> Unit = {}
+    onSkip: (String) -> Unit = {},
+    onPostpone: (String, Int) -> Unit = { _, _ -> },
+    onReschedule: (String) -> Unit = {},
+    onDurationChange: (String, Int) -> Unit = { _, _ -> }
 ) {
     var expanded by remember { mutableStateOf(true) }
+    var showMenu by remember { mutableStateOf(false) }
+    var menuNodeId by remember { mutableStateOf<String?>(null) }
+    
     val dismissState = rememberSwipeToDismissBoxState()
 
     LaunchedEffect(dismissState.currentValue) {
@@ -49,16 +58,22 @@ fun TodayActivityCard(
             onComplete()
             dismissState.reset()
         } else if (dismissState.currentValue == SwipeToDismissBoxValue.EndToStart) {
-            onSkip()
+            onSkip(id)
             dismissState.reset()
         }
+    }
+
+    val effectiveAlpha = when {
+        isCancelled -> 0.4f
+        isSkipped || statusLabel.lowercase() == "skipped" -> 0.5f
+        else -> 1f
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .alpha(if (isCancelled) 0.4f else 1f)
+            .alpha(effectiveAlpha)
     ) {
         // 1. TIEMPO
         Column(
@@ -70,8 +85,16 @@ fun TodayActivityCard(
             Text(
                 text = time,
                 style = MetaMono.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold),
-                color = ColorText
+                color = if (wasShiftedByDomino) ColorExec else ColorText
             )
+            if (wasShiftedByDomino && dominoReason != null) {
+                Icon(
+                    Icons.Default.TrendingFlat,
+                    contentDescription = null,
+                    tint = ColorExec.copy(alpha = 0.7f),
+                    modifier = Modifier.size(10.dp).padding(top = 2.dp)
+                )
+            }
         }
 
         // 2. EJE
@@ -127,7 +150,7 @@ fun TodayActivityCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { onNodeClick(id) },
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, if (wasShiftedByDomino) ColorExec.copy(alpha = 0.3f) else ColorBorder)
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -143,7 +166,8 @@ fun TodayActivityCard(
                             text = title,
                             style = TitleNode.copy(fontSize = 15.sp, fontWeight = FontWeight.Bold),
                             color = ColorText,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            textDecoration = if (isSkipped || statusLabel.lowercase() == "skipped") TextDecoration.LineThrough else null
                         )
                         
                         Surface(
@@ -152,10 +176,28 @@ fun TodayActivityCard(
                             modifier = Modifier.padding(end = 8.dp)
                         ) {
                             Text(
-                                text = statusLabel.uppercase(),
+                                text = (if (isSkipped) "SKIPPED" else statusLabel).uppercase(),
                                 style = MetaMono.copy(fontSize = 8.sp, fontWeight = FontWeight.Bold),
                                 color = statusColor,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        Box {
+                            IconButton(onClick = { 
+                                menuNodeId = id
+                                showMenu = true 
+                            }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.MoreVert, null, tint = ColorTextDim, modifier = Modifier.size(20.dp))
+                            }
+                            
+                            QuickActionsMenu(
+                                expanded = showMenu && menuNodeId == id,
+                                onDismiss = { showMenu = false },
+                                onPostpone = { onPostpone(id, it) },
+                                onSkip = { onSkip(id) },
+                                onReschedule = { onReschedule(id) },
+                                onDurationChange = { onDurationChange(id, it) }
                             )
                         }
 
@@ -169,7 +211,13 @@ fun TodayActivityCard(
                         }
                     }
 
-                    if (subtitle != null) {
+                    if (dominoReason != null) {
+                        Text(
+                            text = dominoReason,
+                            style = MetaMono.copy(fontSize = 9.sp, color = ColorExec.copy(alpha = 0.8f), fontWeight = FontWeight.Medium),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    } else if (subtitle != null) {
                         Text(subtitle, style = MetaMono.copy(fontSize = 10.sp), color = ColorTextDim)
                     }
 
@@ -188,16 +236,15 @@ fun TodayActivityCard(
                                         .padding(start = ((node.depth - 1) * 12).dp)
                                         .background(if (node.isCompleted) Color.White.copy(alpha = 0.03f) else Color.Transparent, RoundedCornerShape(6.dp))
                                         .clickable(enabled = node.fields.isNotEmpty()) {
-                                            Log.d("TODAY_DEBUG", "TODAY OPEN EXECUTE nodeId=${node.id} name=${node.name} depth=${node.depth}")
                                             onNodeClick(node.id)
                                         }
                                         .padding(8.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            if (node.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                                            if (node.isCompleted) Icons.Default.CheckCircle else if (node.isSkipped) Icons.Default.Block else Icons.Default.RadioButtonUnchecked,
                                             null, 
-                                            tint = if (node.isCompleted) ColorExec else ColorTextDim, 
+                                            tint = if (node.isCompleted) ColorExec else if (node.isSkipped) Color.Gray else ColorTextDim, 
                                             modifier = Modifier
                                                 .size(16.dp)
                                                 .clickable { onNodeToggle(node.id) }
@@ -206,11 +253,28 @@ fun TodayActivityCard(
                                         Text(
                                             text = node.name,
                                             modifier = Modifier.weight(1f),
-                                            style = TitleNode.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium, textDecoration = if (node.isCompleted) TextDecoration.LineThrough else null),
-                                            color = if (node.isCompleted) ColorTextDim else ColorText
+                                            style = TitleNode.copy(fontSize = 13.sp, fontWeight = FontWeight.Medium, textDecoration = if (node.isCompleted || node.isSkipped) TextDecoration.LineThrough else null),
+                                            color = if (node.isCompleted || node.isSkipped) ColorTextDim else ColorText
                                         )
                                         if (node.timeLabel != null) {
                                             Text(node.timeLabel, style = MetaMono.copy(fontSize = 9.sp), color = ColorExec)
+                                        }
+                                        
+                                        Box {
+                                            IconButton(onClick = { 
+                                                menuNodeId = node.id
+                                                showMenu = true 
+                                            }, modifier = Modifier.size(20.dp)) {
+                                                Icon(Icons.Default.MoreVert, null, tint = ColorTextDim, modifier = Modifier.size(16.dp))
+                                            }
+                                            QuickActionsMenu(
+                                                expanded = showMenu && menuNodeId == node.id,
+                                                onDismiss = { showMenu = false },
+                                                onPostpone = { onPostpone(node.id, it) },
+                                                onSkip = { onSkip(node.id) },
+                                                onReschedule = { onReschedule(node.id) },
+                                                onDurationChange = { onDurationChange(node.id, it) }
+                                            )
                                         }
                                     }
                                     
@@ -234,5 +298,47 @@ fun TodayActivityCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun QuickActionsMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onPostpone: (Int) -> Unit,
+    onSkip: () -> Unit,
+    onReschedule: () -> Unit,
+    onDurationChange: (Int) -> Unit
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.background(ColorSurface).border(0.5.dp, ColorBorder, RoundedCornerShape(8.dp))
+    ) {
+        DropdownMenuItem(
+            text = { Text("Posponer 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onPostpone(15); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Posponer 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onPostpone(30); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Recortar a 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onDurationChange(30); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.Timer, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Saltar hoy", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onSkip(); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.Block, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Mover hora", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onReschedule(); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.Event, null, modifier = Modifier.size(18.dp)) }
+        )
     }
 }

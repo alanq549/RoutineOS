@@ -1,11 +1,15 @@
 package com.alan.routineos.ui.features.template_builder.sections
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
@@ -15,6 +19,8 @@ import com.alan.routineos.ui.features.template_builder.components.AddDashedButto
 import com.alan.routineos.ui.features.template_builder.components.NodeItem
 import com.alan.routineos.ui.features.template_builder.components.SectionHeader
 import com.alan.routineos.core.util.ScheduleResolver
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.ColorTextDim
 
 fun LazyListScope.nodeStructureSection(
     nodes: List<Node>,
@@ -22,6 +28,10 @@ fun LazyListScope.nodeStructureSection(
     fieldValues: Map<String, List<NodeFieldValue>>,
     nodeTypes: List<NodeType>,
     metadataSchemas: Map<String, List<NodeMetadataSchema>>,
+    activityName: String = "",
+    activityDays: Set<Int> = emptySet(),
+    activityStart: String? = null,
+    activityEnd: String? = null,
     onAddNode: (parentId: String?) -> Unit,
     onUpdateNodeName: (nodeId: String, name: String) -> Unit,
     onUpdateNodeType: (nodeId: String, typeId: String) -> Unit,
@@ -33,13 +43,23 @@ fun LazyListScope.nodeStructureSection(
 ) {
     item {
         SectionHeader(
-            title = "PASOS DE LA ACTIVIDAD", 
+            title = "ESTRUCTURA DE LA ACTIVIDAD", 
             onAdd = { onAddNode(null) },
-            addLabel = "+ paso"
+            addLabel = "+ bloque"
         )
         
+        Column(modifier = Modifier.padding(horizontal = 14.dp)) {
+            Text(
+                "Divide esta actividad en bloques, pasos o materias.",
+                style = MetaMono.copy(fontSize = 8.sp),
+                color = ColorTextDim
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
         AddDashedButton(
-            text = "configurar detalles de los pasos",
+            text = "Agregar bloques o subbloques",
             onClick = onManageDetailsClick
         )
         
@@ -56,6 +76,10 @@ fun LazyListScope.nodeStructureSection(
             nodeTypes = nodeTypes,
             metadataSchemas = metadataSchemas,
             depth = 0,
+            activityName = activityName,
+            activityDays = activityDays,
+            activityStart = activityStart,
+            activityEnd = activityEnd,
             onAddChild = onAddNode,
             onUpdateName = onUpdateNodeName,
             onUpdateType = onUpdateNodeType,
@@ -68,7 +92,7 @@ fun LazyListScope.nodeStructureSection(
 
     item {
         Spacer(modifier = Modifier.height(12.dp))
-        AddDashedButton(text = "agregar paso principal", onClick = { onAddNode(null) })
+        AddDashedButton(text = "agregar bloque principal", onClick = { onAddNode(null) })
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
@@ -82,6 +106,10 @@ private fun NodeHierarchy(
     nodeTypes: List<NodeType>,
     metadataSchemas: Map<String, List<NodeMetadataSchema>>,
     depth: Int,
+    activityName: String,
+    activityDays: Set<Int>,
+    activityStart: String?,
+    activityEnd: String?,
     onAddChild: (String) -> Unit,
     onUpdateName: (String, String) -> Unit,
     onUpdateType: (String, String) -> Unit,
@@ -95,13 +123,38 @@ private fun NodeHierarchy(
     val values = fieldValues[node.id] ?: emptyList()
     val schemas = metadataSchemas[node.typeId] ?: emptyList()
 
-    val effectiveSchedules = ScheduleResolver.resolveEffectiveSchedules(node.id, allNodes, nodeSchedules)
+    val inheritanceInfo = ScheduleResolver.resolveInheritanceInfo(
+        nodeId = node.id,
+        allNodes = allNodes,
+        nodeSchedules = nodeSchedules,
+        activityName = activityName,
+        activityDays = activityDays,
+        activityStart = activityStart,
+        activityEnd = activityEnd
+    )
     val hasOwnSchedule = schedules.isNotEmpty()
-    val isInherited = !hasOwnSchedule && effectiveSchedules.isNotEmpty()
+    val isInherited = !hasOwnSchedule && inheritanceInfo != null
     
     val parentId = node.parentId
-    val isOutside = if (hasOwnSchedule && parentId != null) {
-        val parentEffective = ScheduleResolver.resolveEffectiveSchedules(parentId, allNodes, nodeSchedules)
+    val isOutside = if (hasOwnSchedule) {
+        val parentEffective = if (parentId != null) {
+            ScheduleResolver.resolveEffectiveSchedules(
+                nodeId = parentId,
+                allNodes = allNodes,
+                nodeSchedules = nodeSchedules,
+                activityName = activityName,
+                activityDays = activityDays,
+                activityStart = activityStart,
+                activityEnd = activityEnd
+            )
+        } else {
+             // Si no hay padre, el "rango superior" es la actividad
+             if (activityDays.isNotEmpty() && activityStart != null) {
+                 activityDays.map { day -> 
+                     NodeSchedule(nodeId = node.id, dayOfWeek = day, startTime = activityStart, endTime = activityEnd ?: activityStart)
+                 }
+             } else emptyList()
+        }
         ScheduleResolver.isOutsideRange(schedules, parentEffective)
     } else {
         false
@@ -113,6 +166,8 @@ private fun NodeHierarchy(
         depth = depth,
         hasSchedules = hasOwnSchedule,
         isInherited = isInherited,
+        inheritedFrom = inheritanceInfo?.first,
+        effectiveSchedules = if (hasOwnSchedule) schedules else (inheritanceInfo?.second ?: emptyList()),
         isOutsideRange = isOutside,
         nodeTypes = nodeTypes,
         selectedTypeId = node.typeId,
@@ -136,6 +191,10 @@ private fun NodeHierarchy(
             nodeTypes = nodeTypes,
             metadataSchemas = metadataSchemas,
             depth = depth + 1,
+            activityName = activityName,
+            activityDays = activityDays,
+            activityStart = activityStart,
+            activityEnd = activityEnd,
             onAddChild = onAddChild,
             onUpdateName = onUpdateName,
             onUpdateType = onUpdateType,

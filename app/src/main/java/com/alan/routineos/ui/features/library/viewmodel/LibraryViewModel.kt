@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.library.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
@@ -12,7 +13,6 @@ import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -75,34 +75,19 @@ class LibraryViewModel @Inject constructor(
 
     fun useTemplateToday(id: String) {
         viewModelScope.launch {
-            val template = templateRepo.getById(id) ?: return@launch
-            val today = DateUtils.getStartOfDay()
-            val newInstance = DayInstance(
-                id = UUID.randomUUID().toString(),
-                templateId = template.id,
-                date = today,
-                status = InstanceStatus.GENERATED,
-                syncStatus = SyncStatus.PENDING_SYNC
-            )
-            instanceRepo.upsert(newInstance)
-
-            val templateNodes = nodeRepo.getAllByTemplate(template.id)
-            val idMap = mutableMapOf<String, String>()
-            templateNodes.forEach { idMap[it.id] = UUID.randomUUID().toString() }
-
-            val instanceNodes = templateNodes.map { tNode ->
-                tNode.copy(
-                    id = idMap[tNode.id]!!,
-                    parentId = idMap[tNode.parentId],
-                    templateId = tNode.id,
-                    instanceId = newInstance.id,
-                    status = NodeStatus.PENDING,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis(),
-                    syncStatus = SyncStatus.PENDING_SYNC
-                )
+            try {
+                Log.d("TODAY_DEBUG", "LIBRARY USE TODAY REQUEST templateId=$id")
+                val today = DateUtils.getStartOfDay()
+                val instance = instanceRepo.useTemplateForDate(id, today, forceRegenerate = false)
+                
+                if (instance != null) {
+                    Log.d("TODAY_DEBUG", "LIBRARY USE TODAY SUCCESS templateId=$id")
+                } else {
+                    Log.d("TODAY_DEBUG", "LIBRARY USE TODAY SKIPPED/NO_ACTION templateId=$id")
+                }
+            } catch (e: Exception) {
+                Log.e("TODAY_DEBUG", "LIBRARY USE TODAY ERROR templateId=$id error=${e.message}", e)
             }
-            nodeRepo.insertAll(instanceNodes)
         }
     }
 

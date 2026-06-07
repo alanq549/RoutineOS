@@ -23,10 +23,13 @@ data class TimelineEntryUi(
     val statusColor: Color,
     val barColor: Color,
     val isCancelled: Boolean = false,
+    val isSkipped: Boolean = false,
     val hasConflict: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList(),
     val resolvedNodes: List<ResolvedNodeUi> = emptyList(),
-    val showTimeIndicatorBefore: Boolean = false
+    val showTimeIndicatorBefore: Boolean = false,
+    val wasShiftedByDomino: Boolean = false,
+    val dominoReason: String? = null
 )
 
 data class ResolvedNodeUi(
@@ -35,6 +38,7 @@ data class ResolvedNodeUi(
     val depth: Int,
     val timeLabel: String? = null,
     val isCompleted: Boolean = false,
+    val isSkipped: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList()
 )
 

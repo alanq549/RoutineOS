@@ -21,14 +21,31 @@ import com.alan.routineos.ui.theme.ColorExec
 @Composable
 fun RepeatSection(
     selectedDays: Set<Int>,
+    timeMode: TimeMode,
     onToggleDay: (Int) -> Unit
 ) {
     Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
         Text(
-            "¿QUÉ DÍAS SE REPITE?",
+            "¿QUÉ DÍAS PUEDE APARECER?",
             style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
             color = ColorTextDim
         )
+        Text(
+            "Esto define en qué días RoutineOS puede generar esta actividad.",
+            style = MetaMono.copy(fontSize = 8.sp),
+            color = Color(0xFF555555),
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        
+        if (timeMode == TimeMode.FLEXIBLE && selectedDays.isNotEmpty()) {
+            Text(
+                "Se generará estos días, pero sus pasos decidirán el horario.",
+                style = MetaMono.copy(fontSize = 8.sp, fontWeight = FontWeight.Medium),
+                color = ColorExec.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),

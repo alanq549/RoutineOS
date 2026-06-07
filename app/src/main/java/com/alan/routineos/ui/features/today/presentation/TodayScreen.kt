@@ -112,11 +112,18 @@ fun TodayScreen(
                             statusColor = entry.statusColor,
                             barColor = entry.barColor,
                             isCancelled = entry.isCancelled,
+                            isSkipped = entry.isSkipped,
                             hasConflict = entry.hasConflict,
+                            wasShiftedByDomino = entry.wasShiftedByDomino,
+                            dominoReason = entry.dominoReason,
                             resolvedNodes = entry.resolvedNodes,
                             onNodeToggle = { nodeId -> viewModel.toggleNodeCompletion(nodeId) },
                             onNodeClick = { nodeId -> onNavigateToExecute(nodeId) },
-                            onComplete = { viewModel.toggleNodeCompletion(entry.id) }
+                            onComplete = { viewModel.toggleNodeCompletion(entry.id) },
+                            onSkip = { nodeId -> viewModel.skipNode(nodeId) },
+                            onPostpone = { nodeId, mins -> viewModel.postponeNode(nodeId, mins) },
+                            onReschedule = { nodeId -> viewModel.rescheduleNode(nodeId, "18:00") }, // Placeholder
+                            onDurationChange = { nodeId, mins -> viewModel.changeDuration(nodeId, mins) }
                         )
                     }
                 }

@@ -1,6 +1,7 @@
 package com.alan.routineos.ui.features.template_builder.components
 
 import android.app.TimePickerDialog
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.ui.theme.MetaMono
@@ -42,6 +44,8 @@ fun NodeScheduleSheet(
     node: Node,
     currentSchedules: List<NodeSchedule>,
     isUsingInheritedSchedule: Boolean = false,
+    inheritedSchedules: List<NodeSchedule> = emptyList(),
+    inheritedSource: String? = null,
     onDismiss: () -> Unit,
     onToggleSequential: (Boolean) -> Unit,
     onSave: (List<NodeSchedule>) -> Unit
@@ -69,6 +73,20 @@ fun NodeScheduleSheet(
         }, h, m, true).show()
     }
 
+    // Validation
+    val isAllValid = groups.all { group ->
+        val isOrderValid = ScheduleResolver.timeToMinutes(group.startTime) < ScheduleResolver.timeToMinutes(group.endTime)
+        val isInheritanceValid = if (inheritedSchedules.isNotEmpty()) {
+            group.days.all { day ->
+                val parent = inheritedSchedules.find { it.dayOfWeek == day }
+                if (parent != null) {
+                    ScheduleResolver.isTimeRangeInside(group.startTime, group.endTime, parent.startTime, parent.endTime)
+                } else true
+            }
+        } else true
+        isOrderValid && isInheritanceValid
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = ColorSurface,
@@ -83,7 +101,7 @@ fun NodeScheduleSheet(
 
             if (isUsingInheritedSchedule) {
                 Text(
-                    text = "Usando horario del paso superior como base",
+                    text = "Usando horario de ${inheritedSource ?: "paso superior"} como base",
                     style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
                     color = ColorExec.copy(alpha = 0.7f),
                     modifier = Modifier.padding(top = 4.dp)
@@ -130,6 +148,8 @@ fun NodeScheduleSheet(
                         days = group.days,
                         startTime = group.startTime,
                         endTime = group.endTime,
+                        inheritedSchedules = inheritedSchedules,
+                        inheritedSource = inheritedSource,
                         onDelete = { groups = groups.filter { it.id != group.id } },
                         onDaysChange = { newDays ->
                             groups = groups.map { if (it.id == group.id) it.copy(days = newDays) else it }
@@ -146,7 +166,9 @@ fun NodeScheduleSheet(
                 item {
                     Button(
                         onClick = {
-                            groups = groups + ScheduleGroupUi(days = emptySet(), startTime = "08:00", endTime = "09:00")
+                            val defaultStart = inheritedSchedules.firstOrNull()?.startTime ?: "08:00"
+                            val defaultEnd = inheritedSchedules.firstOrNull()?.endTime ?: "09:00"
+                            groups = groups + ScheduleGroupUi(days = emptySet(), startTime = defaultStart, endTime = defaultEnd)
                             onToggleSequential(false)
                         },
                         modifier = Modifier.fillMaxWidth(),
@@ -164,6 +186,10 @@ fun NodeScheduleSheet(
 
             Button(
                 onClick = { 
+                    if (!isAllValid) {
+                        Log.d("SCHEDULE_VALIDATION", "CONFIRM BLOCKED reason=invalid_ranges")
+                        return@Button
+                    }
                     // Flatten groups back to List<NodeSchedule>
                     val result = groups.flatMap { group ->
                         group.days.map { day ->
@@ -175,13 +201,15 @@ fun NodeScheduleSheet(
                             )
                         }
                     }
+                    Log.d("SCHEDULE_VALIDATION", "VALID TIME RANGE node=${node.name} count=${result.size}")
                     onSave(result) 
                 },
                 modifier = Modifier.fillMaxWidth().height(50.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
-                shape = RoundedCornerShape(10.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = if (isAllValid) ColorExec else Color(0xFF2A2A2A)),
+                shape = RoundedCornerShape(10.dp),
+                enabled = isAllValid || groups.isEmpty()
             ) {
-                Text("CONFIRMAR", style = TitleNode.copy(color = Color.White))
+                Text("CONFIRMAR", style = TitleNode.copy(color = if (isAllValid) Color.White else Color(0xFF555555)))
             }
         }
     }
@@ -192,16 +220,39 @@ private fun ScheduleGroupRow(
     days: Set<Int>,
     startTime: String,
     endTime: String,
+    inheritedSchedules: List<NodeSchedule>,
+    inheritedSource: String?,
     onDelete: () -> Unit,
     onDaysChange: (Set<Int>) -> Unit,
     onStartTimeClick: () -> Unit,
     onEndTimeClick: () -> Unit
 ) {
+    val startMins = ScheduleResolver.timeToMinutes(startTime)
+    val endMins = ScheduleResolver.timeToMinutes(endTime)
+    val isOrderValid = startMins < endMins
+    
+    var outsideDay: Int? = null
+    var parentRange: Pair<String, String>? = null
+    
+    val isInheritanceValid = if (inheritedSchedules.isNotEmpty()) {
+        days.all { day ->
+            val parent = inheritedSchedules.find { it.dayOfWeek == day }
+            if (parent != null) {
+                val valid = ScheduleResolver.isTimeRangeInside(startTime, endTime, parent.startTime, parent.endTime)
+                if (!valid) {
+                    outsideDay = day
+                    parentRange = parent.startTime to parent.endTime
+                }
+                valid
+            } else true
+        }
+    } else true
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color(0xFF161616), RoundedCornerShape(10.dp))
-            .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(10.dp))
+            .border(0.5.dp, if (isOrderValid && isInheritanceValid) Color(0xFF2A2A2A) else Color.Red.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
             .padding(12.dp)
     ) {
         Row(
@@ -242,13 +293,39 @@ private fun ScheduleGroupRow(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onStartTimeClick() }) {
                 Text("INICIO", style = MetaMono.copy(fontSize = 7.sp), color = Color(0xFF555555))
-                Text(startTime, style = TitleNode.copy(fontSize = 15.sp, letterSpacing = 1.sp), color = Color.White)
+                Text(startTime, style = TitleNode.copy(fontSize = 15.sp, letterSpacing = 1.sp), color = if (isOrderValid) Color.White else Color.Red)
             }
             Text("-", color = Color(0xFF333333))
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onEndTimeClick() }) {
                 Text("FIN", style = MetaMono.copy(fontSize = 7.sp), color = Color(0xFF555555))
-                Text(endTime, style = TitleNode.copy(fontSize = 15.sp, letterSpacing = 1.sp), color = Color.White)
+                Text(endTime, style = TitleNode.copy(fontSize = 15.sp, letterSpacing = 1.sp), color = if (isOrderValid) Color.White else Color.Red)
             }
+        }
+
+        if (!isOrderValid) {
+            Text(
+                "El inicio debe ser antes del fin",
+                style = MetaMono.copy(fontSize = 8.sp, color = Color.Red.copy(alpha = 0.7f)),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            LaunchedEffect(startTime, endTime) {
+                Log.d("SCHEDULE_VALIDATION", "INVALID TIME ORDER start=$startTime end=$endTime")
+            }
+        } else if (!isInheritanceValid) {
+            Text(
+                "Fuera del horario heredado de ${inheritedSource ?: "paso superior"}: ${parentRange?.first} - ${parentRange?.second}",
+                style = MetaMono.copy(fontSize = 8.sp, color = Color.Red.copy(alpha = 0.7f)),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            LaunchedEffect(startTime, endTime) {
+                Log.d("SCHEDULE_VALIDATION", "INVALID OUTSIDE_PARENT child=$startTime-$endTime parent=${parentRange?.first}-${parentRange?.second}")
+            }
+        } else if (inheritedSchedules.isNotEmpty()) {
+             Text(
+                "Debe estar dentro de ${inheritedSchedules.firstOrNull()?.startTime} - ${inheritedSchedules.firstOrNull()?.endTime}",
+                style = MetaMono.copy(fontSize = 8.sp, color = Color(0xFF444444)),
+                modifier = Modifier.padding(top = 8.dp)
+            )
         }
     }
 }

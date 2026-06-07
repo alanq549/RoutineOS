@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.template_builder.presentation
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +25,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,7 @@ import com.alan.routineos.ui.features.template_builder.sections.AdvancedSection
 import com.alan.routineos.ui.features.template_builder.sections.ColorSection
 import com.alan.routineos.ui.features.template_builder.sections.QuickPresetsSection
 import com.alan.routineos.ui.features.template_builder.sections.RepeatSection
+import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 import com.alan.routineos.ui.features.template_builder.sections.TimeRangeSection
 import com.alan.routineos.ui.features.template_builder.sections.nodeStructureSection
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
@@ -66,14 +69,33 @@ fun TemplateBuilderScreen(
         Color(0xFF795548), Color(0xFF607D8B)
     )
 
+    // FIX 8.3 — Human Validation Logic
+    val isTimeValid = when (uiState.timeMode) {
+        TimeMode.FIXED_START -> uiState.startTime.isNotBlank() && uiState.startTime != "--:--"
+        TimeMode.RANGE -> uiState.startTime.isNotBlank() && uiState.startTime != "--:--" && 
+                         uiState.endTime.isNotBlank() && uiState.endTime != "--:--"
+        TimeMode.DURATION -> uiState.durationMinutes > 0
+        TimeMode.FLEXIBLE -> true
+    }
+    
+    val canSave = uiState.name.isNotBlank() && isTimeValid
+
+    LaunchedEffect(canSave, uiState.timeMode) {
+        Log.d("TEMPLATE_UX_DEBUG", "TEMPLATE VALIDATION mode=${uiState.timeMode} valid=$canSave")
+    }
+
     Scaffold(
         topBar = {
             TemplateBuilderTopBar(
                 isNewTemplate = uiState.templateId == null,
-                canSave = uiState.name.isNotBlank(),
+                canSave = canSave,
                 onBack = onBack,
                 onSave = {
-                    viewModel.saveTemplate(onSuccess = onBack)
+                    if (canSave) {
+                        viewModel.saveTemplate(onSuccess = onBack)
+                    } else {
+                        Log.d("TEMPLATE_UX_DEBUG", "SAVE BLOCKED reason=invalid_fields")
+                    }
                 }
             )
         },
@@ -84,7 +106,7 @@ fun TemplateBuilderScreen(
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // 1. IDENTITY: ¿Qué vamos a organizar?
+            // 1. IDENTITY
             item {
                 ActivityIdentitySection(
                     name = uiState.name,
@@ -124,13 +146,14 @@ fun TemplateBuilderScreen(
                 }
             }
 
-            // 3. TEMPORAL: ¿CUÁNDO OCURRE?
+            // 3. TEMPORAL: ¿QUÉ TAN FIJA ES ESTA ACTIVIDAD?
             item {
                 TimeRangeSection(
                     selectedMode = uiState.timeMode,
                     startTime = uiState.startTime,
                     endTime = uiState.endTime,
                     durationMinutes = uiState.durationMinutes,
+                    hasNodeSchedules = uiState.nodeSchedules.any { it.value.isNotEmpty() },
                     onModeChange = viewModel::updateTimeMode,
                     onStartTimeChange = viewModel::updateStartTime,
                     onEndTimeChange = viewModel::updateEndTime,
@@ -138,15 +161,16 @@ fun TemplateBuilderScreen(
                 )
             }
 
-            // 4. RECURRENCE: ¿QUÉ DÍAS SE REPITE?
+            // 4. RECURRENCE: ¿QUÉ DÍAS PUEDE APARECER?
             item {
                 RepeatSection(
                     selectedDays = uiState.selectedDays,
+                    timeMode = uiState.timeMode,
                     onToggleDay = viewModel::toggleDay
                 )
             }
 
-            // 5. ESTRUCTURA INTERNA (PASOS)
+            // 5. ESTRUCTURA INTERNA (BLOQUES)
             if (!showStructure && uiState.nodes.isEmpty()) {
                 item {
                     Box(
@@ -159,7 +183,7 @@ fun TemplateBuilderScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "Agregar pasos a esta actividad",
+                            "Agregar bloques a esta actividad",
                             style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
                             color = ColorExec
                         )
@@ -172,6 +196,10 @@ fun TemplateBuilderScreen(
                     fieldValues = uiState.fieldValues,
                     nodeTypes = uiState.nodeTypes,
                     metadataSchemas = uiState.metadataSchemas,
+                    activityName = uiState.name,
+                    activityDays = uiState.selectedDays,
+                    activityStart = uiState.startTime,
+                    activityEnd = uiState.endTime,
                     onAddNode = { parentId ->
                         viewModel.addNode("", "default", parentId)
                     },
@@ -189,20 +217,26 @@ fun TemplateBuilderScreen(
         if (selectedNodeForSchedule != null) {
             val selectedNode = selectedNodeForSchedule!!
             val ownSchedules = uiState.nodeSchedules[selectedNode.id].orEmpty()
-            val inheritedSchedules = ScheduleResolver.resolveInheritedSchedules(
-                node = selectedNode,
+            val inheritanceInfo = ScheduleResolver.resolveInheritanceInfo(
+                nodeId = selectedNode.id,
                 allNodes = uiState.nodes,
-                nodeSchedules = uiState.nodeSchedules
+                nodeSchedules = uiState.nodeSchedules,
+                activityName = uiState.name,
+                activityDays = uiState.selectedDays,
+                activityStart = uiState.startTime,
+                activityEnd = uiState.endTime
             )
 
-            val schedulesForSheet =
-                if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
+            val inheritedSchedules = inheritanceInfo?.second ?: emptyList()
+            val schedulesForSheet = if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
             val isUsingInheritedSchedule = ownSchedules.isEmpty() && inheritedSchedules.isNotEmpty()
 
             NodeScheduleSheet(
                 node = selectedNode,
                 currentSchedules = schedulesForSheet,
                 isUsingInheritedSchedule = isUsingInheritedSchedule,
+                inheritedSchedules = inheritedSchedules,
+                inheritedSource = inheritanceInfo?.first,
                 onDismiss = { selectedNodeForSchedule = null },
                 onToggleSequential = { isSequential ->
                     viewModel.toggleNodeSequential(selectedNode.id, isSequential)

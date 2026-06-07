@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
+import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeType
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
@@ -37,6 +38,8 @@ fun NodeItem(
     depth: Int,
     hasSchedules: Boolean = false,
     isInherited: Boolean = false,
+    inheritedFrom: String? = null,
+    effectiveSchedules: List<NodeSchedule> = emptyList(),
     isOutsideRange: Boolean = false,
     nodeTypes: List<NodeType> = emptyList(),
     selectedTypeId: String? = null,
@@ -179,10 +182,40 @@ fun NodeItem(
         AnimatedVisibility(visible = isExpanded) {
             Column(modifier = Modifier.padding(10.dp)) {
                 if (isInherited) {
-                    Text(
-                        "HORARIO HEREDADO",
+                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                        Text(
+                            "HORARIO HEREDADO DE: ${inheritedFrom?.uppercase() ?: "PASO SUPERIOR"}",
+                            style = MetaMono.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                            color = Color(0xFF777777)
+                        )
+                        effectiveSchedules.firstOrNull()?.let { s ->
+                            Text(
+                                "${s.startTime} - ${s.endTime}",
+                                style = TitleNode.copy(fontSize = 10.sp),
+                                color = Color(0xFF999999)
+                            )
+                        }
+                    }
+                } else if (hasSchedules) {
+                     Text(
+                        "HORARIO PROPIO",
                         style = MetaMono.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
-                        color = Color(0xFF777777),
+                        color = Color(0xFF42A5F5),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    effectiveSchedules.firstOrNull()?.let { s ->
+                        Text(
+                            "${s.startTime} - ${s.endTime}",
+                            style = TitleNode.copy(fontSize = 10.sp),
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        "SIN HORARIO DEFINIDO",
+                        style = MetaMono.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                        color = Color(0xFF444444),
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 }
