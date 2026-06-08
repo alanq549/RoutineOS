@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.system.components
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -12,28 +13,38 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.core.util.DateUtils
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.ui.features.system.state.PlanningItemType
+import com.alan.routineos.ui.features.system.state.PlanningItemUi
+import com.alan.routineos.ui.features.system.state.PlanningStatus
+import com.alan.routineos.ui.features.system.state.PlanningTargetUi
 import com.alan.routineos.ui.theme.*
 import java.util.Date
 
 /**
  * REDESIGNED SYSTEM COMPONENTS — INTENTION-FIRST UX
- * Human-centric adaptations replace technical configurations.
+ * Human-centric adaptations and planning.
  */
 
 enum class AdaptationType { CANCEL_DAY, VACATION, RESCHEDULE, REDUCED, SPECIAL }
@@ -134,6 +145,115 @@ fun AdaptationCard(
     }
 }
 
+@Composable
+fun PlanningItemCard(
+    item: PlanningItemUi,
+    onToggle: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val isDone = item.status == PlanningStatus.DONE
+    val icon = when(item.type) {
+        PlanningItemType.TASK -> Icons.Default.TaskAlt
+        PlanningItemType.NOTE -> Icons.AutoMirrored.Filled.Note
+        PlanningItemType.REMINDER -> Icons.Default.NotificationsNone
+    }
+    val iconColor = when(item.type) {
+        PlanningItemType.TASK -> ColorExec
+        PlanningItemType.NOTE -> Color.Gray
+        PlanningItemType.REMINDER -> Color(0xFF2196F3)
+    }
+    val typeLabel = when(item.type) {
+        PlanningItemType.TASK -> "TAREA"
+        PlanningItemType.NOTE -> "NOTA"
+        PlanningItemType.REMINDER -> "RECORDATORIO"
+    }
+
+    val dueLabel = remember(item.dueDate, item.dueTime) {
+        item.dueDate?.let { due ->
+            val startOfToday = DateUtils.getStartOfDay()
+            val startOfDue = DateUtils.getStartOfDay(due)
+            val dateLabel = when {
+                startOfDue == startOfToday -> "Hoy"
+                startOfDue == startOfToday + 24 * 3600 * 1000L -> "Mañana"
+                else -> DateUtils.formatShortDate(due)
+            }
+            if (item.dueTime != null) "Vence: $dateLabel ${item.dueTime}" else "Vence: $dateLabel"
+        }
+    }
+
+    Surface(
+        color = ColorSurface,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isDone) ColorExec.copy(alpha = 0.2f) else ColorBorder),
+        modifier = Modifier.fillMaxWidth().alpha(if (isDone) 0.5f else 1f)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onToggle, modifier = Modifier.size(24.dp)) {
+                Icon(
+                    if (isDone) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                    null,
+                    tint = if (isDone) ColorExec else ColorTextDim,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(icon, null, tint = iconColor, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = typeLabel,
+                        style = MetaMono.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                        color = iconColor
+                    )
+                }
+                Text(
+                    text = item.title,
+                    style = TitleNode.copy(
+                        fontSize = 14.sp, 
+                        fontWeight = FontWeight.Medium,
+                        textDecoration = if (isDone) TextDecoration.LineThrough else null
+                    ),
+                    color = ColorText
+                )
+                if (!item.description.isNullOrBlank()) {
+                    Text(
+                        text = item.description,
+                        style = MetaMono.copy(fontSize = 10.sp),
+                        color = ColorTextDim,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+                if (dueLabel != null) {
+                    Text(
+                        text = dueLabel,
+                        style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                        color = if (isDone) ColorTextMuted else ColorExec,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                if (item.relatedNodePath != null) {
+                    Text(
+                        text = "Relacionado con: ${item.relatedNodePath}",
+                        style = MetaMono.copy(fontSize = 9.sp),
+                        color = ColorTextMuted,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+
+            IconButton(onClick = onDelete, modifier = Modifier.size(20.dp)) {
+                Icon(Icons.Default.Close, null, tint = ColorTextMuted, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NewAdaptationSheet(
@@ -142,7 +262,7 @@ fun NewAdaptationSheet(
 ) {
     var intention by remember { mutableStateOf<AdaptationIntention?>(null) }
     var strategy by remember { mutableStateOf(AdjustmentStrategy.PAUSE_ALL) }
-    var rangeType by remember { mutableIntStateOf(0) } // 0: Only this day, 1: All week, 2: Custom
+    var rangeType by remember { mutableIntStateOf(0) } // 0: Only this day, 1: All week
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -157,7 +277,7 @@ fun NewAdaptationSheet(
                 .padding(bottom = 48.dp)
         ) {
             Text(
-                text = "¿Qué adaptación necesitas?",
+                text = "¿Qué cambio de rutina necesitas?",
                 style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
                 color = ColorText
             )
@@ -243,11 +363,211 @@ fun NewAdaptationSheet(
                         colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("APLICAR ADAPTACIÓN", style = TitleNode.copy(color = Color.White))
+                        Text("APLICAR CAMBIO", style = TitleNode.copy(color = Color.White))
                     }
                 }
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewPlanningItemSheet(
+    targets: List<PlanningTargetUi>,
+    onDismiss: () -> Unit,
+    onConfirm: (title: String, desc: String?, type: PlanningItemType, nodeId: String?, nodePath: String?, dueDate: Long?, dueTime: String?) -> Unit
+) {
+    var title by remember { mutableStateOf("") }
+    var desc by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf(PlanningItemType.TASK) }
+    var dueDate by remember { mutableStateOf<Long?>(null) }
+    var dueTime by remember { mutableStateOf<String?>(null) }
+    var selectedTarget by remember { mutableStateOf<PlanningTargetUi?>(null) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = ColorBg,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 48.dp)
+        ) {
+            Text("¿Qué quieres registrar?", style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold), color = ColorText)
+            Spacer(modifier = Modifier.height(20.dp))
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlanningTypeChip("Tarea", type == PlanningItemType.TASK) { type = PlanningItemType.TASK }
+                PlanningTypeChip("Nota", type == PlanningItemType.NOTE) { type = PlanningItemType.NOTE }
+                PlanningTypeChip("Recordatorio", type == PlanningItemType.REMINDER) { type = PlanningItemType.REMINDER }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Título", style = MetaMono) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = ColorBorder,
+                    focusedBorderColor = ColorExec,
+                    focusedLabelColor = ColorExec
+                )
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            OutlinedTextField(
+                value = desc,
+                onValueChange = { desc = it },
+                label = { Text("Detalle opcional", style = MetaMono) },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = ColorBorder,
+                    focusedBorderColor = ColorExec,
+                    focusedLabelColor = ColorExec
+                )
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("FECHA LÍMITE", style = MetaMono.copy(fontSize = 9.sp), color = ColorTextMuted)
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val startOfToday = DateUtils.getStartOfDay()
+                val startOfTomorrow = startOfToday + 24 * 3600 * 1000L
+
+                SelectableChip("Sin fecha", dueDate == null) { 
+                    dueDate = null 
+                    Log.d("PLANNING_DEBUG", "PLANNING DUE DATE SELECTED value=null")
+                }
+                SelectableChip("Hoy", dueDate == startOfToday) { 
+                    dueDate = startOfToday
+                    Log.d("PLANNING_DEBUG", "PLANNING DUE DATE SELECTED value=HOY")
+                }
+                SelectableChip("Mañana", dueDate == startOfTomorrow) { 
+                    dueDate = startOfTomorrow
+                    Log.d("PLANNING_DEBUG", "PLANNING DUE DATE SELECTED value=MAÑANA")
+                }
+            }
+
+            AnimatedVisibility(visible = dueDate != null) {
+                Column {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("HORA (OPCIONAL)", style = MetaMono.copy(fontSize = 9.sp), color = ColorTextMuted)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SelectableChip("Sin hora", dueTime == null) { 
+                            dueTime = null 
+                            Log.d("PLANNING_DEBUG", "PLANNING DUE TIME SELECTED value=null")
+                        }
+                        SelectableChip("23:59", dueTime == "23:59") { 
+                            dueTime = "23:59" 
+                            Log.d("PLANNING_DEBUG", "PLANNING DUE TIME SELECTED value=23:59")
+                        }
+                        SelectableChip("08:00", dueTime == "08:00") { 
+                            dueTime = "08:00" 
+                            Log.d("PLANNING_DEBUG", "PLANNING DUE TIME SELECTED value=08:00")
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SelectableChip("12:00", dueTime == "12:00") { 
+                            dueTime = "12:00" 
+                            Log.d("PLANNING_DEBUG", "PLANNING DUE TIME SELECTED value=12:00")
+                        }
+                        SelectableChip("18:00", dueTime == "18:00") { 
+                            dueTime = "18:00" 
+                            Log.d("PLANNING_DEBUG", "PLANNING DUE TIME SELECTED value=18:00")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text("RELACIONADO CON", style = MetaMono.copy(fontSize = 9.sp), color = ColorTextMuted)
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            SelectableChip("Sin vincular", selectedTarget == null) { 
+                selectedTarget = null 
+                Log.d("PLANNING_DEBUG", "PLANNING TARGET SELECTED nodeId=null path=null")
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            if (targets.isNotEmpty()) {
+                targets.forEach { target ->
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp)
+                            .clickable { 
+                                selectedTarget = target 
+                                Log.d("PLANNING_DEBUG", "PLANNING TARGET SELECTED nodeId=${target.nodeId} path=${target.path}")
+                            },
+                        color = if (selectedTarget?.nodeId == target.nodeId) ColorExec.copy(alpha = 0.1f) else ColorSurface,
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.5.dp, 
+                            if (selectedTarget?.nodeId == target.nodeId) ColorExec else ColorBorder
+                        )
+                    ) {
+                        Text(
+                            text = target.path, 
+                            modifier = Modifier.padding(12.dp), 
+                            style = TitleNode.copy(fontSize = 11.sp), 
+                            color = if (selectedTarget?.nodeId == target.nodeId) ColorExec else ColorText
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = { 
+                    Log.d("PLANNING_DEBUG", "PLANNING ITEM CREATED relatedNodeId=${selectedTarget?.nodeId} relatedPath=${selectedTarget?.path}")
+                    onConfirm(title, desc.takeIf { it.isNotBlank() }, type, selectedTarget?.nodeId, selectedTarget?.path, dueDate, dueTime)
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
+                shape = RoundedCornerShape(12.dp),
+                enabled = title.isNotBlank()
+            ) {
+                Text("CREAR", style = TitleNode.copy(color = Color.White))
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectableChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable { onClick() },
+        color = if (isSelected) ColorExec.copy(alpha = 0.1f) else ColorSurface,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isSelected) ColorExec else ColorBorder)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = TitleNode.copy(fontSize = 12.sp, color = if (isSelected) ColorText else ColorTextDim)
+        )
+    }
+}
+
+@Composable
+private fun PlanningTypeChip(label: String, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier.clickable { onClick() },
+        color = if (isSelected) ColorExec.copy(alpha = 0.1f) else ColorSurface,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isSelected) ColorExec else ColorBorder)
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            style = TitleNode.copy(fontSize = 12.sp, color = if (isSelected) ColorText else ColorTextDim)
+        )
     }
 }
 
@@ -313,6 +633,25 @@ private fun DateModeButton(
 }
 
 @Composable
+private fun DatePickerTrigger(value: String) {
+    Surface(
+        color = ColorSurface,
+        shape = RoundedCornerShape(10.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.CalendarToday, null, Modifier.size(14.dp), tint = ColorTextDim)
+            Spacer(Modifier.width(10.dp))
+            Text(value, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
+        }
+    }
+}
+
+@Composable
 private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClick: () -> Unit) {
     Surface(
         modifier = Modifier
@@ -354,6 +693,52 @@ private fun StrategyOption(item: AdjustmentStrategy, isSelected: Boolean, onClic
 }
 
 @Composable
+private fun ManualActivityRow(name: String) {
+    var selectedAction by remember { mutableIntStateOf(2) } // 0: Cancel, 1: Move, 2: Keep
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(name, style = TitleNode.copy(fontSize = 14.sp), color = ColorText)
+
+        Row(
+            modifier = Modifier
+                .background(ColorSurface, RoundedCornerShape(8.dp))
+                .padding(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            ActionToggleIcon(Icons.Default.Pause, selectedAction == 0) { selectedAction = 0 }
+            ActionToggleIcon(Icons.Default.Schedule, selectedAction == 1) { selectedAction = 1 }
+            ActionToggleIcon(Icons.Default.Check, selectedAction == 2) { selectedAction = 2 }
+        }
+    }
+}
+
+@Composable
+private fun ActionToggleIcon(icon: ImageVector, isSelected: Boolean, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .size(32.dp)
+            .clickable { onClick() },
+        color = if (isSelected) ColorBg else Color.Transparent,
+        shape = RoundedCornerShape(6.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = if (isSelected) ColorExec else ColorTextMuted
+            )
+        }
+    }
+}
+
+@Composable
 private fun ReactivePreviewBox(strategy: AdjustmentStrategy) {
     Surface(
         color = ColorSurface.copy(alpha = 0.5f),
@@ -390,7 +775,10 @@ fun SystemWeekStrip(
     currentWeekStart: Long,
     onDateSelected: (Long) -> Unit,
     onNextWeek: () -> Unit,
-    onPrevWeek: () -> Unit
+    onPrevWeek: () -> Unit,
+    adaptationCount: Int = 0,
+    taskCount: Int = 0,
+    noteCount: Int = 0
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -456,6 +844,16 @@ fun SystemWeekStrip(
                         style = TitleNode.copy(fontSize = 16.sp, fontWeight = FontWeight.Bold),
                         color = if (isSelected) ColorExec else ColorText
                     )
+                    
+                    Row(
+                        modifier = Modifier.padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (adaptationCount > 0) Dot(Color(0xFFFF9800))
+                        if (taskCount > 0) Dot(Color(0xFF2196F3))
+                        if (noteCount > 0) Dot(Color.Gray)
+                    }
+
                     if (isSelected) {
                         Box(
                             modifier = Modifier
@@ -468,4 +866,9 @@ fun SystemWeekStrip(
             }
         }
     }
+}
+
+@Composable
+private fun Dot(color: Color) {
+    Box(modifier = Modifier.size(3.dp).background(color, CircleShape))
 }

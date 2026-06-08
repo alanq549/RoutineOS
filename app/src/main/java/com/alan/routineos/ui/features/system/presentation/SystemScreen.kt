@@ -19,7 +19,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.alan.routineos.ui.features.system.tabs.ActivitiesTab
-import com.alan.routineos.ui.features.system.tabs.AdjustmentsTab
+import com.alan.routineos.ui.features.system.tabs.PlanningTab
 import com.alan.routineos.ui.features.system.viewmodel.SystemViewModel
 import com.alan.routineos.ui.theme.ColorBg
 import com.alan.routineos.ui.theme.ColorExec
@@ -54,7 +54,7 @@ fun SystemScreen(
                     }
                 }
             ) {
-                val titles = listOf("ACTIVIDADES", "ADAPTACIONES")
+                val titles = listOf("ACTIVIDADES", "PLANIFICACIÓN")
                 titles.forEachIndexed { index, title ->
                     Tab(
                         selected = pagerState.currentPage == index,
@@ -83,13 +83,18 @@ fun SystemScreen(
         ) { page ->
             when (page) {
                 0 -> ActivitiesTab(onNavigateToBuilder = onNavigateToBuilder)
-                1 -> AdjustmentsTab(
+                1 -> PlanningTab(
                     state = uiState,
+                    allNodes = uiState.allNodes,
+                    onSubTabSelected = viewModel::setPlanningSubTab,
                     onDateSelected = viewModel::selectDate,
                     onNextWeek = viewModel::nextWeek,
                     onPrevWeek = viewModel::prevWeek,
                     onCreateAdaptation = viewModel::createAdaptation,
-                    onDeleteAdaptation = viewModel::deleteAdaptation
+                    onDeleteAdaptation = viewModel::deleteAdaptation,
+                    onCreatePlanningItem = viewModel::createPlanningItem,
+                    onTogglePlanningItem = viewModel::togglePlanningItem,
+                    onDeletePlanningItem = viewModel::deletePlanningItem
                 )
                 else -> Unit
             }
