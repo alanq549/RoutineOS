@@ -93,9 +93,11 @@ fun SystemScreen(
                     onCreateAdaptation = viewModel::createAdaptation,
                     onDeleteAdaptation = viewModel::deleteAdaptation,
                     onCreatePlanningItem = viewModel::createPlanningItem,
+                    onUpdatePlanningItem = viewModel::updatePlanningItem,
                     onTogglePlanningItem = viewModel::togglePlanningItem,
                     onDeletePlanningItem = viewModel::deletePlanningItem
                 )
+
                 else -> Unit
             }
         }

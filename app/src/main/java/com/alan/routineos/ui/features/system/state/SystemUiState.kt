@@ -30,7 +30,11 @@ data class PlanningItemUi(
     val dueTime: String? = null,
     val relatedNodeId: String? = null,
     val relatedNodePath: String? = null,
-    val status: PlanningStatus = PlanningStatus.PENDING
+    val status: PlanningStatus = PlanningStatus.PENDING,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncStatus: String = "LOCAL",
+    val version: Int = 1
 )
 
 data class PlanningTargetUi(
@@ -40,4 +44,4 @@ data class PlanningTargetUi(
 )
 
 enum class PlanningItemType { TASK, NOTE, REMINDER }
-enum class PlanningStatus { PENDING, DONE }
+enum class PlanningStatus { PENDING, COMPLETED }

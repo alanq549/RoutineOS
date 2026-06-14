@@ -13,7 +13,9 @@ data class ExecuteUiState(
     val fieldValues: Map<String, String> = emptyMap(),
     val history: List<HistorySession> = emptyList(),
     val isLoading: Boolean = true,
-    val shouldStartTimer: Int? = null
+    val shouldStartTimer: Int? = null,
+    val hasUnsavedChanges: Boolean = false,
+    val showExitConfirmation: Boolean = false
 )
 
 data class HistorySession(

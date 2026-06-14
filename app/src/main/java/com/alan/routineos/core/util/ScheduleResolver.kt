@@ -1,6 +1,5 @@
 package com.alan.routineos.core.util
 
-import android.util.Log
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeSchedule
 
@@ -16,23 +15,17 @@ object ScheduleResolver {
     ): List<NodeSchedule> {
         val ownSchedules = nodeSchedules[nodeId].orEmpty()
         if (ownSchedules.isNotEmpty()) {
-            Log.d("SCHEDULE_DEBUG", "NODE OWN SCHEDULE FOUND nodeId=$nodeId")
             return ownSchedules
         }
 
         val info = resolveInheritanceInfo(nodeId, allNodes, nodeSchedules, activityName, activityDays, activityStart, activityEnd)
         if (info != null) {
-            Log.d("SCHEDULE_DEBUG", "NODE INHERITED SCHEDULE FOUND nodeId=$nodeId inheritedFrom=${info.first}")
             return info.second
         }
 
-        Log.d("SCHEDULE_DEBUG", "NODE NO EFFECTIVE SCHEDULE nodeId=$nodeId")
         return emptyList()
     }
 
-    /**
-     * Busca el horario heredado y el nombre de la fuente (nodo o actividad).
-     */
     fun resolveInheritanceInfo(
         nodeId: String,
         allNodes: List<Node>,
@@ -58,7 +51,6 @@ object ScheduleResolver {
             }
         }
 
-        // Fallback a la actividad si tiene horario definido
         if (activityName != null && activityDays.isNotEmpty() && activityStart != null) {
             val virtualSchedules = activityDays.map { day ->
                 NodeSchedule(
@@ -74,9 +66,6 @@ object ScheduleResolver {
         return null
     }
 
-    /**
-     * Busca horarios únicamente en los ancestros del nodo, ignorando los propios.
-     */
     fun resolveInheritedSchedules(
         node: Node,
         allNodes: List<Node>,
@@ -89,9 +78,6 @@ object ScheduleResolver {
         return resolveInheritanceInfo(node.id, allNodes, nodeSchedules, activityName, activityDays, activityStart, activityEnd)?.second ?: emptyList()
     }
 
-    /**
-     * Compara los horarios propios de un nodo con los de su padre para detectar si están fuera de rango.
-     */
     fun isOutsideRange(ownSchedules: List<NodeSchedule>, parentSchedules: List<NodeSchedule>): Boolean {
         if (ownSchedules.isEmpty() || parentSchedules.isEmpty()) return false
         
@@ -104,31 +90,6 @@ object ScheduleResolver {
         return false
     }
 
-    /**
-     * FIX 4 - Fallback por nombre para detectar días de la semana de forma flexible.
-     */
-    fun getWeekdayFromName(name: String): Int? {
-        val normalized = name.trim().lowercase()
-        return when {
-            normalized.contains("lunes") -> 1
-            normalized.contains("martes") -> 2
-            normalized.contains("miércoles") || normalized.contains("miercoles") -> 3
-            normalized.contains("jueves") -> 4
-            normalized.contains("viernes") -> 5
-            normalized.contains("sábado") || normalized.contains("sabado") -> 6
-            normalized.contains("domingo") -> 7
-            else -> null
-        }
-    }
-
-    fun isWeekdayNameFallback(name: String, weekday: Int): Boolean {
-        val dayValue = getWeekdayFromName(name)
-        return dayValue != null && dayValue == weekday
-    }
-
-    /**
-     * FIX 5 - Helper para validar si un rango está contenido en otro.
-     */
     fun isTimeRangeInside(
         childStart: String,
         childEnd: String,

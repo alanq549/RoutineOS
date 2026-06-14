@@ -1,7 +1,6 @@
 package com.alan.routineos.ui.features.onboarding.state
 
 import com.alan.routineos.data.local.entities.FieldType
-import com.alan.routineos.ui.features.template_builder.sections.ContextCategory
 import java.util.UUID
 
 data class NodeTypeDraft(
@@ -24,12 +23,25 @@ data class NodeMetadataSchemaDraft(
 data class OnboardingUiState(
     val currentStep: Int = 1,
     val routineName: String = "",
-    val category: ContextCategory = ContextCategory.FLEXIBLE,
     val nodeTypes: List<NodeTypeDraft> = emptyList(),
     val selectedDays: List<Int> = emptyList(), // 1=Mon, 7=Sun
     val startTime: String = "08:00",
-    val endTime: String = "09:00"
+    val endTime: String = "09:00",
+    val isCustomizingTypes: Boolean = false,
+    val hasMadeTypeChoice: Boolean = false
 ) {
+    val totalSteps: Int
+        get() {
+            var count = 3 // 1: Nombre, 2: Elección, 3: Horario (Mínimo)
+            if (isCustomizingTypes) {
+                count += 1 // 4: Tipos
+                if (nodeTypes.any { it.hasMetrics }) {
+                    count += 1 // 5: Métricas
+                }
+            }
+            return count
+        }
+
     val isTimeValid: Boolean
         get() = try {
             val s = startTime.split(":").map { it.toInt() }

@@ -9,11 +9,9 @@ import com.alan.routineos.core.util.DateUtils
 import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.data.local.entities.*
 import com.alan.routineos.data.repository.*
-import com.alan.routineos.ui.features.template_builder.sections.TimeMode
-import com.alan.routineos.ui.features.today.state.ResolvedFieldUi
-import com.alan.routineos.ui.features.today.state.ResolvedNodeUi
-import com.alan.routineos.ui.features.today.state.TimelineEntryUi
-import com.alan.routineos.ui.features.today.state.TodayUiState
+import com.alan.routineos.ui.features.system.state.PlanningItemType
+import com.alan.routineos.ui.features.system.state.PlanningStatus
+import com.alan.routineos.ui.features.today.state.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -33,7 +31,8 @@ class TodayViewModel @Inject constructor(
     private val scheduleRepo: ScheduleRepository,
     private val exceptionRepo: ScheduleExceptionRepository,
     private val schemaRepo: MetadataSchemaRepository,
-    private val nodeOverrideRepo: NodeOverrideRepository
+    private val nodeOverrideRepo: NodeOverrideRepository,
+    private val planningRepo: PlanningRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -45,6 +44,9 @@ class TodayViewModel @Inject constructor(
     )
 
     val uiState: StateFlow<TodayUiState> = _uiState
+
+    private val _events = MutableSharedFlow<String>()
+    val events = _events.asSharedFlow()
 
     init {
         viewModelScope.launch {
@@ -80,87 +82,100 @@ class TodayViewModel @Inject constructor(
         val weekday = DateUtils.getDayOfWeek()
 
         viewModelScope.launch {
-            instanceRepo.getByDate(today)
-                .flatMapLatest { instances ->
-                    if (instances.isEmpty()) {
-                        Log.d("TODAY_DEBUG", "OBSERVE: No instances found for today")
-                        flowOf(emptyList<TimelineEntryUi>())
+            combine(
+                instanceRepo.getByDate(today),
+                exceptionRepo.getActiveForDate(today),
+                _uiState.map { it.currentTime }.distinctUntilChanged()
+            ) { instances, exceptions, currentTime ->
+                Triple(instances, exceptions, currentTime)
+            }.flatMapLatest { (instances, exceptions, currentTime) ->
+                if (instances.isEmpty()) {
+                    Log.d("TODAY_DEBUG", "OBSERVE: No instances found for today. Exceptions: ${exceptions.size}")
+                    flowOf(emptyList<TimelineEntryUi>() to exceptions)
+                } else {
+                    Log.d("TODAY_DEBUG", "OBSERVE: Found ${instances.size} instances. Resolving data...")
+                    val templatesFlow = templateRepo.getAll()
+                    val schedulesFlow = scheduleRepo.getAll()
+                    val nodeSchedulesFlow = nodeRepo.getAllNodeSchedules()
+                    val fieldValuesFlow = fieldValueRepo.getAll()
+                    val schemasFlow = schemaRepo.getAll()
+                    val overridesFlow = nodeOverrideRepo.getAll()
+                    val planningFlow = planningRepo.getAllPlanningItems()
+
+                    val nodeFlows = instances.map { instance ->
+                        val tId = instance.templateId ?: ""
+                        nodeRepo.getByInstance(instance.id).map { nodes ->
+                            nodes.map { node -> node to tId }
+                        }
+                    }
+
+                    val allNodesFlow = if (nodeFlows.isEmpty()) {
+                        flowOf(emptyList<Pair<Node, String>>())
                     } else {
-                        Log.d("TODAY_DEBUG", "OBSERVE: Found ${instances.size} instances. Resolving data...")
-                        val templatesFlow = templateRepo.getAll()
-                        val schedulesFlow = scheduleRepo.getAll()
-                        val nodeSchedulesFlow = nodeRepo.getAllNodeSchedules()
-                        val fieldValuesFlow = fieldValueRepo.getAll()
-                        val schemasFlow = schemaRepo.getAll()
-                        val overridesFlow = nodeOverrideRepo.getAll()
-
-                        val nodeFlows = instances.map { instance ->
-                            val tId = instance.templateId ?: ""
-                            nodeRepo.getByInstance(instance.id).map { nodes ->
-                                nodes.map { node -> node to tId }
-                            }
-                        }
-
-                        val allNodesFlow = if (nodeFlows.isEmpty()) {
-                            flowOf(emptyList<Pair<Node, String>>())
-                        } else {
-                            combine(nodeFlows) { arrays ->
-                                arrays.toList().flatten()
-                            }
-                        }
-
-                        combine(
-                            allNodesFlow,
-                            templatesFlow,
-                            schedulesFlow,
-                            nodeSchedulesFlow,
-                            fieldValuesFlow,
-                            schemasFlow,
-                            overridesFlow
-                        ) { args: Array<*> ->
-                            @Suppress("UNCHECKED_CAST")
-                            val nodesWithId = args[0] as List<Pair<Node, String>>
-                            @Suppress("UNCHECKED_CAST")
-                            val templates = args[1] as List<RoutineTemplate>
-                            @Suppress("UNCHECKED_CAST")
-                            val schedules = args[2] as List<Schedule>
-                            @Suppress("UNCHECKED_CAST")
-                            val nodeSchedules = args[3] as List<NodeSchedule>
-                            @Suppress("UNCHECKED_CAST")
-                            val fieldValues = args[4] as List<NodeFieldValue>
-                            @Suppress("UNCHECKED_CAST")
-                            val schemas = args[5] as List<NodeMetadataSchema>
-                            @Suppress("UNCHECKED_CAST")
-                            val overrides = args[6] as List<NodeOverride>
-
-                            buildTimeline(
-                                nodesWithId,
-                                templates,
-                                schedules,
-                                nodeSchedules,
-                                fieldValues,
-                                schemas,
-                                overrides,
-                                weekday
-                            )
+                        combine(nodeFlows) { arrays ->
+                            arrays.toList().flatten()
                         }
                     }
-                }
-                .collect { entries ->
-                    _uiState.update { state ->
-                        state.copy(
-                            timelineEntries = entries,
-                            totalCount = entries.sumOf { it.resolvedNodes.size + 1 },
-                            completedCount = entries.sumOf { entry ->
-                                val rootDone =
-                                    if (entry.statusLabel == NodeStatus.COMPLETED.name.lowercase()) 1 else 0
-                                val childrenDone = entry.resolvedNodes.count { it.isCompleted }
-                                rootDone + childrenDone
-                            },
-                            isLoading = false
+
+                    combine(
+                        allNodesFlow,
+                        templatesFlow,
+                        schedulesFlow,
+                        nodeSchedulesFlow,
+                        fieldValuesFlow,
+                        schemasFlow,
+                        overridesFlow,
+                        planningFlow
+                    ) { args: Array<*> ->
+                        @Suppress("UNCHECKED_CAST")
+                        val nodesWithId = args[0] as List<Pair<Node, String>>
+                        @Suppress("UNCHECKED_CAST")
+                        val templates = args[1] as List<RoutineTemplate>
+                        @Suppress("UNCHECKED_CAST")
+                        val schedules = args[2] as List<Schedule>
+                        @Suppress("UNCHECKED_CAST")
+                        val nodeSchedules = args[3] as List<NodeSchedule>
+                        @Suppress("UNCHECKED_CAST")
+                        val fieldValues = args[4] as List<NodeFieldValue>
+                        @Suppress("UNCHECKED_CAST")
+                        val schemas = args[5] as List<NodeMetadataSchema>
+                        @Suppress("UNCHECKED_CAST")
+                        val overrides = args[6] as List<NodeOverride>
+                        @Suppress("UNCHECKED_CAST")
+                        val planningItems = args[7] as List<PlanningItemEntity>
+
+                        val timeline = buildTimeline(
+                            nodesWithId,
+                            templates,
+                            schedules,
+                            nodeSchedules,
+                            fieldValues,
+                            schemas,
+                            overrides,
+                            planningItems,
+                            weekday,
+                            currentTime
                         )
+                        timeline to exceptions
                     }
                 }
+            }
+            .collect { (entries, exceptions) ->
+                _uiState.update { state ->
+                    state.copy(
+                        timelineEntries = entries,
+                        activeExceptions = exceptions,
+                        totalCount = entries.sumOf { it.resolvedNodes.size + 1 },
+                        completedCount = entries.sumOf { entry ->
+                            val rootDone =
+                                if (entry.statusLabel == NodeStatus.COMPLETED.name.lowercase()) 1 else 0
+                            val childrenDone = entry.resolvedNodes.count { it.isCompleted }
+                            rootDone + childrenDone
+                        },
+                        isLoading = false
+                    )
+                }
+            }
         }
     }
 
@@ -172,20 +187,25 @@ class TodayViewModel @Inject constructor(
         fieldValues: List<NodeFieldValue>,
         schemas: List<NodeMetadataSchema>,
         overrides: List<NodeOverride>,
-        weekday: Int
+        planningItems: List<PlanningItemEntity>,
+        weekday: Int,
+        currentTime: String
     ): List<TimelineEntryUi> {
 
+        val activeSchedules = schedules.filter { it.isActive }
+        
         val allNodes = nodesWithId.map { it.first }
         val rootNodesWithTemplate = nodesWithId.filter { it.first.parentId == null }
         val nodeSchedulesMap = nodeSchedules.groupBy { it.nodeId }
         val overridesMap = overrides.groupBy { it.nodeId }
+        
+        val planningMap = planningItems
+            .filter { it.status != PlanningStatus.COMPLETED.name }
+            .groupBy { it.relatedNodeId }
 
-        Log.d("TODAY_DOMINO_DEBUG", "DOMINO START entries=${rootNodesWithTemplate.size}")
-
-        // 1. Prepare initial blocks for root nodes
         val blocks = rootNodesWithTemplate.mapNotNull { (rootNode, templateId) ->
             val template = templates.find { it.id == templateId } ?: return@mapNotNull null
-            val templateSchedules = schedules.filter { it.templateId == templateId }
+            val templateSchedules = activeSchedules.filter { it.templateId == templateId }
             val globalSchedule = templateSchedules.find { it.weekday == weekday }
             
             val baseStart = globalSchedule?.startTime ?: rootNode.scheduledTime
@@ -207,26 +227,24 @@ class TodayViewModel @Inject constructor(
             )
         }.sortedBy { it.originalStart ?: "99:99" }
 
-        // 2. Apply Overrides & Domino Propagations
         var accumulatedShift = 0
         var shiftSource: String? = null
+        var lastBlockEndTime: String? = null
 
         val resolvedBlocks = blocks.map { block ->
-            Log.d("TODAY_DOMINO_DEBUG", "DOMINO BLOCK base node=${block.node.name} start=${block.originalStart} end=${block.originalEnd}")
-
             val nodeOverrides = overridesMap[block.node.id].orEmpty()
             
-            // Apply accumulated shift if block has a defined start
-            if (accumulatedShift != 0 && block.originalStart != null) {
+            // Subfix 12.5: Temporal Dependencies (Roots)
+            if (block.node.isSequential && lastBlockEndTime != null) {
+                block.effectiveStart = lastBlockEndTime
+            } else if (accumulatedShift != 0 && block.originalStart != null) {
                 block.effectiveStart = addMinutes(block.originalStart, accumulatedShift)
                 block.appliedShiftMinutes = accumulatedShift
                 block.shiftReason = "Movido por $shiftSource ${if(accumulatedShift > 0) "+" else ""}${accumulatedShift}m"
-                Log.d("TODAY_DOMINO_DEBUG", "DOMINO SHIFT APPLIED node=${block.node.name} shift=$accumulatedShift")
             }
 
             var nodeSpecificDelta = 0
             nodeOverrides.forEach { ov ->
-                Log.d("TODAY_DOMINO_DEBUG", "DOMINO OVERRIDE node=${block.node.name} type=${ov.overrideType}")
                 when (ov.overrideType) {
                     OverrideType.SKIP -> block.isSkipped = true
                     OverrideType.POSTPONE -> {
@@ -238,7 +256,6 @@ class TodayViewModel @Inject constructor(
                         val newTime = ov.newTime
                         if (newTime != null && block.originalStart != null) {
                             block.effectiveStart = newTime
-                            // Calculate how much this anchor changes the timeline relative to current shift
                             val totalShiftFromOriginal = ScheduleResolver.timeToMinutes(newTime) - ScheduleResolver.timeToMinutes(block.originalStart)
                             nodeSpecificDelta = totalShiftFromOriginal - block.appliedShiftMinutes
                         }
@@ -257,21 +274,19 @@ class TodayViewModel @Inject constructor(
             if (nodeSpecificDelta != 0) {
                 accumulatedShift += nodeSpecificDelta
                 shiftSource = block.node.name
-                Log.d("TODAY_DOMINO_DEBUG", "DOMINO DELTA GENERATED node=${block.node.name} delta=$nodeSpecificDelta")
             }
 
-            Log.d("TODAY_DOMINO_DEBUG", "DOMINO RESULT node=${block.node.name} effectiveStart=${block.effectiveStart} effectiveEnd=${block.effectiveEnd}")
+            lastBlockEndTime = block.effectiveEnd
             block
         }
 
-        Log.d("TODAY_DOMINO_DEBUG", "DOMINO END")
+        val currentMins = ScheduleResolver.timeToMinutes(currentTime)
 
-        // 3. Convert to UI State
         return resolvedBlocks.map { block ->
             val rootNode = block.node
             val templateId = block.template.id
             val template = block.template
-            val templateSchedules = schedules.filter { it.templateId == templateId }
+            val templateSchedules = activeSchedules.filter { it.templateId == templateId }
 
             val resolvedNodes = resolveNodesRecursive(
                 parentId = rootNode.id,
@@ -280,6 +295,7 @@ class TodayViewModel @Inject constructor(
                 overridesMap = overridesMap,
                 fieldValues = fieldValues,
                 schemas = schemas,
+                planningMap = planningMap,
                 depth = 1,
                 todayWeekday = weekday,
                 template = template,
@@ -287,12 +303,28 @@ class TodayViewModel @Inject constructor(
             )
 
             val label = when {
-                template.timeMode == TimeMode.FLEXIBLE -> "Flexible"
                 block.effectiveStart != null && block.effectiveEnd != null && block.effectiveStart != block.effectiveEnd ->
                     "${block.effectiveStart} - ${block.effectiveEnd}"
                 block.effectiveStart != null -> block.effectiveStart!!
-                else -> "--:--"
+                else -> "Flexible"
             }
+
+            val isCurrent = if (block.effectiveStart != null && block.effectiveEnd != null) {
+                val startMins = ScheduleResolver.timeToMinutes(block.effectiveStart!!)
+                val endMins = ScheduleResolver.timeToMinutes(block.effectiveEnd!!)
+                currentMins in startMins until endMins
+            } else false
+
+            // Subfix 12.3: Conflict Detection
+            val hasConflict = block.appliedShiftMinutes != 0 && !block.node.isSequential
+            
+            val suggestions = if (hasConflict) {
+                listOf(
+                    ConflictResolutionUi("Aceptar nuevo horario", ConflictResolutionType.RESCHEDULE, block.effectiveStart),
+                    ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
+                    ConflictResolutionUi("Reducir duración", ConflictResolutionType.REDUCE, "30")
+                )
+            } else emptyList()
 
             val color = try { Color(template.colorHex.toColorInt()) } catch (e: Exception) { Color(0xFF42A5F5) }
             val rootValues = fieldValues.filter { it.nodeId == rootNode.id }
@@ -301,18 +333,23 @@ class TodayViewModel @Inject constructor(
                 id = rootNode.id,
                 time = label,
                 sortTime = block.effectiveStart ?: "99:99",
+                endTime = block.effectiveEnd,
                 title = rootNode.name,
                 statusLabel = if (block.isSkipped) "skipped" else rootNode.status.name.lowercase(),
                 statusColor = color,
                 barColor = color,
                 isSkipped = block.isSkipped,
+                isCurrent = isCurrent,
+                hasConflict = hasConflict,
+                conflictResolutionSuggestions = suggestions,
                 fields = rootValues.map { v ->
                     val s = schemas.find { it.id == v.schemaId }
                     ResolvedFieldUi(v.schemaId, v.fieldName, s?.fieldLabel ?: v.fieldName, v.value, s?.fieldType ?: FieldType.TEXT)
                 },
                 resolvedNodes = resolvedNodes,
                 wasShiftedByDomino = block.appliedShiftMinutes != 0,
-                dominoReason = block.shiftReason
+                dominoReason = if (hasConflict) "Conflicto por retraso previo" else block.shiftReason,
+                planningInfo = calculatePlanningIndicator(planningMap[rootNode.id], rootNode.id)
             )
         }.sortedBy { it.sortTime }
     }
@@ -324,62 +361,64 @@ class TodayViewModel @Inject constructor(
         overridesMap: Map<String, List<NodeOverride>>,
         fieldValues: List<NodeFieldValue>,
         schemas: List<NodeMetadataSchema>,
+        planningMap: Map<String?, List<PlanningItemEntity>>,
         depth: Int,
         todayWeekday: Int,
         template: RoutineTemplate,
         allTemplateSchedules: List<Schedule>
     ): List<ResolvedNodeUi> {
-        return allNodes
-            .filter { it.parentId == parentId }
-            .sortedBy { it.position }
-            .flatMap { node ->
-                val todayGlobal = allTemplateSchedules.find { it.weekday == todayWeekday }
-                val effectiveSchedules = ScheduleResolver.resolveEffectiveSchedules(
-                    node.id, allNodes, nodeSchedulesMap, template.name,
-                    allTemplateSchedules.map { it.weekday }.toSet(),
-                    todayGlobal?.startTime ?: allTemplateSchedules.firstOrNull()?.startTime,
-                    todayGlobal?.endTime ?: allTemplateSchedules.firstOrNull()?.endTime
-                )
-                
-                val todaySchedule = effectiveSchedules.find { it.dayOfWeek == todayWeekday }
-                val nodeOverrides = overridesMap[node.id].orEmpty()
-                
-                var appliesToday = true
-                if (effectiveSchedules.isNotEmpty() && todaySchedule == null) {
-                    appliesToday = false
-                } else if (effectiveSchedules.isEmpty()) {
-                    if (!ScheduleResolver.isWeekdayNameFallback(node.name, todayWeekday) && 
-                        ScheduleResolver.getWeekdayFromName(node.name) != null) {
-                        appliesToday = false
-                    }
-                }
+        val children = allNodes.filter { it.parentId == parentId }.sortedBy { it.position }
+        val result = mutableListOf<ResolvedNodeUi>()
+        var lastEndTime: String? = null
 
-                if (!appliesToday) return@flatMap emptyList<ResolvedNodeUi>()
+        children.forEach { node ->
+            val todayGlobal = allTemplateSchedules.find { it.weekday == todayWeekday }
+            val effectiveSchedules = ScheduleResolver.resolveEffectiveSchedules(
+                node.id, allNodes, nodeSchedulesMap, template.name,
+                allTemplateSchedules.map { it.weekday }.toSet(),
+                todayGlobal?.startTime ?: allTemplateSchedules.firstOrNull()?.startTime,
+                todayGlobal?.endTime ?: allTemplateSchedules.firstOrNull()?.endTime
+            )
+            
+            val todaySchedule = effectiveSchedules.find { it.dayOfWeek == todayWeekday }
+            val nodeOverrides = overridesMap[node.id].orEmpty()
+            
+            var appliesToday = true
+            if (effectiveSchedules.isNotEmpty() && todaySchedule == null) {
+                appliesToday = false
+            }
 
-                // APPLY OVERRIDES LOGIC
+            if (appliesToday) {
                 var status = node.status
                 var startTime = todaySchedule?.startTime ?: node.scheduledTime
                 var endTime = todaySchedule?.endTime
-                
+                val durationMins = node.durationMinutes ?: 30
+
+                // Subfix 12.5: Temporal Dependencies (Siblings)
+                if (node.isSequential && lastEndTime != null) {
+                    startTime = lastEndTime
+                    endTime = addMinutes(startTime, durationMins)
+                }
+
                 nodeOverrides.forEach { override ->
                     when (override.overrideType) {
-                        OverrideType.SKIP -> {
-                            status = NodeStatus.SKIPPED
-                        }
+                        OverrideType.SKIP -> status = NodeStatus.SKIPPED
                         OverrideType.POSTPONE -> {
                             val mins = override.postponeMinutes ?: 0
                             startTime = addMinutes(startTime, mins)
                             endTime = addMinutes(endTime, mins)
                         }
-                        OverrideType.RESCHEDULE -> {
-                            startTime = override.newTime ?: startTime
-                        }
+                        OverrideType.RESCHEDULE -> startTime = override.newTime ?: startTime
                         OverrideType.DURATION_CHANGE -> {
                             val newDuration = override.newDurationMinutes ?: 0
                             endTime = addMinutes(startTime, newDuration)
                         }
                         else -> {}
                     }
+                }
+
+                if (endTime == null && startTime != null) {
+                    endTime = addMinutes(startTime, durationMins)
                 }
 
                 val timeLabel = if (startTime != null) {
@@ -397,14 +436,78 @@ class TodayViewModel @Inject constructor(
                     fields = nodeValues.map { v ->
                         val s = schemas.find { it.id == v.schemaId }
                         ResolvedFieldUi(v.schemaId, v.fieldName, s?.fieldLabel ?: v.fieldName, v.value, s?.fieldType ?: FieldType.TEXT)
-                    }
+                    },
+                    planningInfo = calculatePlanningIndicator(planningMap[node.id], node.id)
                 )
 
-                listOf(resolvedNode) + resolveNodesRecursive(
-                    node.id, allNodes, nodeSchedulesMap, overridesMap, fieldValues, schemas,
+                result.add(resolvedNode)
+                result.addAll(resolveNodesRecursive(
+                    node.id, allNodes, nodeSchedulesMap, overridesMap, fieldValues, schemas, planningMap,
                     depth + 1, todayWeekday, template, allTemplateSchedules
-                )
+                ))
+
+                lastEndTime = endTime
             }
+        }
+        return result
+    }
+
+    private fun calculatePlanningIndicator(items: List<PlanningItemEntity>?, nodeId: String): PlanningIndicatorUi? {
+        if (items.isNullOrEmpty()) {
+            return null
+        }
+        
+        val today = DateUtils.getStartOfDay()
+        val linkedItems = items.map { entity ->
+            val pType = PlanningItemType.valueOf(entity.type)
+            val urgency: Int
+            
+            if (entity.dueDate != null) {
+                val dueStart = DateUtils.getStartOfDay(entity.dueDate)
+                when {
+                    dueStart < today -> urgency = 0
+                    dueStart == today -> urgency = 1
+                    else -> urgency = 2
+                }
+            } else {
+                urgency = 2
+            }
+
+            PlanningLinkedItemUi(
+                id = entity.id,
+                type = pType,
+                title = entity.title,
+                dueDate = entity.dueDate,
+                dueTime = entity.dueTime,
+                status = PlanningStatus.valueOf(entity.status),
+                urgency = urgency
+            )
+        }.sortedWith(
+            compareBy<PlanningLinkedItemUi> { it.urgency }
+                .thenBy { 
+                    when(it.type) {
+                        PlanningItemType.TASK -> 0
+                        PlanningItemType.NOTE -> 1
+                        PlanningItemType.REMINDER -> 2
+                    }
+                }
+        )
+
+        if (linkedItems.isEmpty()) {
+            return null
+        }
+
+        val overdue = linkedItems.count { it.urgency == 0 }
+        val dueToday = linkedItems.count { it.urgency == 1 }
+        val pending = linkedItems.count { it.urgency == 2 }
+        
+        return PlanningIndicatorUi(
+            pendingCount = pending,
+            todayCount = dueToday,
+            overdueCount = overdue,
+            totalCount = linkedItems.size,
+            items = linkedItems
+        )
     }
 
     private fun addMinutes(time: String?, minutes: Int): String? {
@@ -426,6 +529,7 @@ class TodayViewModel @Inject constructor(
             val node = nodeRepo.getById(nodeId) ?: return@launch
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.POSTPONE, postponeMinutes = minutes)
+            _events.emit("Actividad pospuesta $minutes min")
         }
     }
 
@@ -435,6 +539,7 @@ class TodayViewModel @Inject constructor(
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.SKIP)
             nodeRepo.update(node.copy(status = NodeStatus.SKIPPED))
+            _events.emit("Actividad saltada")
         }
     }
 
@@ -443,6 +548,7 @@ class TodayViewModel @Inject constructor(
             val node = nodeRepo.getById(nodeId) ?: return@launch
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.RESCHEDULE, newTime = newTime)
+            _events.emit("Actividad reprogramada")
         }
     }
 
@@ -451,6 +557,15 @@ class TodayViewModel @Inject constructor(
             val node = nodeRepo.getById(nodeId) ?: return@launch
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.DURATION_CHANGE, newDurationMinutes = newDurationMinutes)
+            _events.emit("Duración actualizada")
+        }
+    }
+
+    fun resolveConflict(nodeId: String, resolution: ConflictResolutionUi) {
+        when (resolution.type) {
+            ConflictResolutionType.RESCHEDULE -> resolution.newValue?.let { rescheduleNode(nodeId, it) }
+            ConflictResolutionType.SKIP -> skipNode(nodeId)
+            ConflictResolutionType.REDUCE -> resolution.newValue?.toIntOrNull()?.let { changeDuration(nodeId, it) }
         }
     }
 
@@ -473,7 +588,6 @@ class TodayViewModel @Inject constructor(
                 postponeMinutes = postponeMinutes ?: existing.postponeMinutes,
                 updatedAt = System.currentTimeMillis()
             ))
-            Log.d("TODAY_OVERRIDE_DEBUG", "UPDATE EXISTING OVERRIDE nodeId=$nodeId type=$type")
         } else {
             nodeOverrideRepo.upsert(NodeOverride(
                 nodeId = nodeId,
@@ -483,7 +597,6 @@ class TodayViewModel @Inject constructor(
                 newDurationMinutes = newDurationMinutes,
                 postponeMinutes = postponeMinutes
             ))
-            Log.d("TODAY_OVERRIDE_DEBUG", "CREATE OVERRIDE nodeId=$nodeId type=$type")
         }
     }
 
@@ -500,7 +613,34 @@ class TodayViewModel @Inject constructor(
             nodesToUpdate[targetNode.id] = targetNode.copy(status = newStatus, updatedAt = now)
             descendants.forEach { desc -> nodesToUpdate[desc.id] = desc.copy(status = newStatus, updatedAt = now) }
             updateAncestors(targetNode.parentId, allNodes, nodesToUpdate, newStatus)
-            if (nodesToUpdate.isNotEmpty()) nodeRepo.insertAll(nodesToUpdate.values.toList())
+            if (nodesToUpdate.isNotEmpty()) {
+                nodeRepo.insertAll(nodesToUpdate.values.toList())
+                if (newStatus == NodeStatus.COMPLETED) {
+                    _events.emit("Actividad completada")
+                }
+            }
+        }
+    }
+
+    fun togglePlanningTask(taskId: String) {
+        viewModelScope.launch {
+            val allItems = planningRepo.getAllPlanningItems().first()
+            val item = allItems.find { it.id == taskId } ?: return@launch
+            
+            if (PlanningItemType.valueOf(item.type) != PlanningItemType.TASK) return@launch
+            
+            val isCompleting = item.status == PlanningStatus.PENDING.name
+            val newStatus = if (isCompleting) PlanningStatus.COMPLETED else PlanningStatus.PENDING
+            val updatedItem = item.copy(
+                status = newStatus.name,
+                updatedAt = System.currentTimeMillis(),
+                version = item.version + 1
+            )
+            
+            planningRepo.upsertPlanningItem(updatedItem)
+            if (isCompleting) {
+                _events.emit("Tarea completada")
+            }
         }
     }
 
@@ -528,10 +668,10 @@ class TodayViewModel @Inject constructor(
 
     private fun generateInstanceIfNeeded(today: Long, weekday: Int) {
         viewModelScope.launch {
-            val exceptions = exceptionRepo.getActiveForDate(today).first()
-            if (exceptions.any { it.affectsGeneration }) return@launch
             val activeSchedules = scheduleRepo.getActiveForWeekday(weekday, today).first()
-            activeSchedules.forEach { active -> instanceRepo.generateInstanceIfNeeded(active.templateId, today) }
+            activeSchedules.forEach { active -> 
+                instanceRepo.generateInstanceIfNeeded(active.templateId, today) 
+            }
         }
     }
 
@@ -539,7 +679,8 @@ class TodayViewModel @Inject constructor(
         viewModelScope.launch {
             while (true) {
                 val cal = Calendar.getInstance()
-                _uiState.update { it.copy(currentTime = String.format(Locale.US, "%02d:%02d", cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))) }
+                val newTime = String.format(Locale.US, "%02d:%02d", cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+                _uiState.update { it.copy(currentTime = newTime) }
                 delay(60_000)
             }
         }

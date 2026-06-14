@@ -4,9 +4,10 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.entities.Node
-import com.alan.routineos.data.local.entities.ScheduleException
+import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.data.repository.InstanceRepository
 import com.alan.routineos.data.repository.NodeRepository
+import com.alan.routineos.data.repository.PlanningRepository
 import com.alan.routineos.data.repository.ScheduleExceptionRepository
 import com.alan.routineos.ui.features.system.state.PlanningItemType
 import com.alan.routineos.ui.features.system.state.PlanningItemUi
@@ -24,34 +25,34 @@ import javax.inject.Inject
 @HiltViewModel
 class SystemViewModel @Inject constructor(
     private val exceptionRepo: ScheduleExceptionRepository,
-    private val nodeRepo: NodeRepository
+    private val nodeRepo: NodeRepository,
+    private val planningRepo: PlanningRepository,
+    private val instanceRepo: InstanceRepository
 ) : ViewModel() {
 
     private val _selectedDate = MutableStateFlow(DateUtils.getStartOfDay())
     private val _currentWeekStart = MutableStateFlow(DateUtils.getStartOfWeek())
     private val _planningSubTab = MutableStateFlow(PlanningSection.ROUTINE_CHANGES)
-    
-    // In-memory storage for Planning Items as requested for FIX 9 (not persisted in Room yet)
-    private val _planningItems = MutableStateFlow<List<PlanningItemUi>>(emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<SystemUiState> = _selectedDate.flatMapLatest { selectedDate ->
         combine(
             _currentWeekStart,
             _planningSubTab,
-            _planningItems,
+            planningRepo.getAllPlanningItems(),
             nodeRepo.getAllTemplateNodes(),
             exceptionRepo.getActiveForDate(selectedDate)
-        ) { weekStart, subTab, items, allNodes, adaptations ->
+        ) { weekStart, subTab, itemsEntities, allNodes, adaptations ->
             
             val targets = buildPlanningTargets(allNodes)
-            Log.d("PLANNING_DEBUG", "PLANNING TARGETS LOADED count=${targets.size}")
+            val items = itemsEntities.map { it.toUi() }
 
             // Filter: show items due on selectedDate OR items with no due date
             val filteredItems = items.filter { item ->
                 item.dueDate == null || DateUtils.getStartOfDay(item.dueDate) == selectedDate
             }.sortedWith(
-                compareByDescending<PlanningItemUi> { it.dueDate != null }
+                compareBy<PlanningItemUi> { it.status == PlanningStatus.COMPLETED }
+                    .thenByDescending { it.dueDate != null }
                     .thenBy { it.dueTime ?: "zzzz" }
                     .thenBy { it.title }
             )
@@ -76,13 +77,11 @@ class SystemViewModel @Inject constructor(
 
     fun setPlanningSubTab(section: PlanningSection) {
         _planningSubTab.value = section
-        Log.d("PLANNING_DEBUG", "PLANNING SECTION SELECTED section=$section")
     }
 
     fun selectDate(date: Long) {
         val startOfDay = DateUtils.getStartOfDay(date)
         _selectedDate.value = startOfDay
-        Log.d("PLANNING_DEBUG", "CALENDAR DAY SELECTED date=$startOfDay")
     }
 
     fun nextWeek() {
@@ -99,11 +98,15 @@ class SystemViewModel @Inject constructor(
         _currentWeekStart.value = calendar.timeInMillis
     }
 
-    fun createAdaptation(label: String, type: String, rangeType: Int) {
+    fun createAdaptation(label: String, type: String, rangeType: Int, recurrence: RecurrenceType = RecurrenceType.NONE) {
         viewModelScope.launch {
             val from: Long
             val to: Long
             
+            val calendar = Calendar.getInstance()
+            calendar.timeInMillis = _selectedDate.value
+            val weekday = DateUtils.getDayOfWeek(calendar.time)
+
             when (rangeType) {
                 0 -> { // Solo este día
                     from = _selectedDate.value
@@ -122,61 +125,83 @@ class SystemViewModel @Inject constructor(
             val exception = ScheduleException(
                 label = label,
                 dateFrom = from,
-                dateTo = to,
-                affectsGeneration = true
+                dateTo = if (recurrence != RecurrenceType.NONE) Long.MAX_VALUE else to,
+                affectsGeneration = true,
+                recurrenceType = recurrence,
+                weekday = if (recurrence == RecurrenceType.WEEKLY) weekday else if (recurrence == RecurrenceType.MONTHLY) calendar.get(Calendar.DAY_OF_MONTH) else null
             )
             exceptionRepo.upsert(exception)
-            Log.d("PLANNING_DEBUG", "ROUTINE_CHANGE CREATE label=$label from=$from to=$to")
+            
+            if (recurrence == RecurrenceType.NONE) {
+                refreshInstancesInRange(from, to)
+            } else {
+                instanceRepo.refreshInstancesForDate(_selectedDate.value)
+            }
         }
     }
 
     fun deleteAdaptation(adaptation: ScheduleException) {
         viewModelScope.launch {
             exceptionRepo.delete(adaptation)
-            Log.d("PLANNING_DEBUG", "ROUTINE_CHANGE DELETE id=${adaptation.id}")
+            if (adaptation.recurrenceType == RecurrenceType.NONE) {
+                refreshInstancesInRange(adaptation.dateFrom, adaptation.dateTo)
+            } else {
+                instanceRepo.refreshInstancesForDate(_selectedDate.value)
+            }
         }
     }
 
-    // Planning Items (Tasks, Notes, Reminders) - In memory for now
-    fun createPlanningItem(
-        title: String,
-        description: String?,
-        type: PlanningItemType,
-        nodeId: String? = null,
-        nodePath: String? = null,
-        dueDate: Long? = null,
-        dueTime: String? = null
-    ) {
+    private suspend fun refreshInstancesInRange(from: Long, to: Long) {
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = from
+        val endDay = DateUtils.getStartOfDay(to)
+        
+        var currentDay = DateUtils.getStartOfDay(calendar.timeInMillis)
+        while (currentDay <= endDay) {
+            instanceRepo.refreshInstancesForDate(currentDay)
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+            currentDay = DateUtils.getStartOfDay(calendar.timeInMillis)
+            if (calendar.timeInMillis > from + 365L * 24 * 60 * 60 * 1000) break 
+        }
+    }
+
+    // Planning Items
+    fun createPlanningItem(title: String, desc: String?, type: PlanningItemType, nodeId: String? = null, nodePath: String? = null, dueDate: Long? = null, dueTime: String? = null) {
         viewModelScope.launch {
             val newItem = PlanningItemUi(
                 id = UUID.randomUUID().toString(),
                 type = type,
                 title = title,
-                description = description,
+                description = desc,
                 dueDate = dueDate,
                 dueTime = dueTime,
                 relatedNodeId = nodeId,
                 relatedNodePath = nodePath,
                 status = PlanningStatus.PENDING
             )
-            _planningItems.value = _planningItems.value + newItem
-            Log.d("PLANNING_DEBUG", "PLANNING ITEM CREATED relatedNodeId=$nodeId relatedPath=$nodePath")
+            planningRepo.upsertPlanningItem(newItem.toEntity())
+        }
+    }
+
+    fun updatePlanningItem(id: String, title: String, desc: String?, nodeId: String? = null, nodePath: String? = null, dueDate: Long? = null, dueTime: String? = null) {
+        viewModelScope.launch {
+            val items = planningRepo.getAllPlanningItems().first()
+            val currentEntity = items.find { it.id == id } ?: return@launch
+            val updatedEntity = currentEntity.copy(title = title, description = desc, dueDate = dueDate, dueTime = dueTime, relatedNodeId = nodeId, relatedNodePath = nodePath, updatedAt = System.currentTimeMillis(), version = currentEntity.version + 1)
+            planningRepo.upsertPlanningItem(updatedEntity)
         }
     }
 
     fun togglePlanningItem(id: String) {
-        _planningItems.value = _planningItems.value.map {
-            if (it.id == id) {
-                val newStatus = if (it.status == PlanningStatus.PENDING) PlanningStatus.DONE else PlanningStatus.PENDING
-                it.copy(status = newStatus)
-            } else it
+        viewModelScope.launch {
+            val itemsEntities = planningRepo.getAllPlanningItems().first()
+            val currentEntity = itemsEntities.find { it.id == id } ?: return@launch
+            val newStatus = if (currentEntity.status == PlanningStatus.PENDING.name) PlanningStatus.COMPLETED.name else PlanningStatus.PENDING.name
+            planningRepo.upsertPlanningItem(currentEntity.copy(status = newStatus, updatedAt = System.currentTimeMillis(), version = currentEntity.version + 1))
         }
     }
 
-    fun deletePlanningItem(id: String) {
-        _planningItems.value = _planningItems.value.filter { it.id != id }
-        Log.d("PLANNING_DEBUG", "PLANNING ITEM DELETE id=$id")
-    }
+    fun deletePlanningItem(id: String) = viewModelScope.launch { planningRepo.deletePlanningItem(id) }
 
     private fun buildPlanningTargets(nodes: List<Node>): List<PlanningTargetUi> {
         val nodeMap = nodes.associateBy { it.id }
@@ -189,11 +214,10 @@ class SystemViewModel @Inject constructor(
                 current = current.parentId?.let { nodeMap[it] }
                 if (current != null) level++
             }
-            PlanningTargetUi(
-                nodeId = node.id,
-                path = pathParts.joinToString(" > "),
-                level = level
-            )
+            PlanningTargetUi(nodeId = node.id, path = pathParts.joinToString(" > "), level = level)
         }.sortedBy { it.path }
     }
+
+    private fun PlanningItemEntity.toUi() = PlanningItemUi(id = id, type = PlanningItemType.valueOf(type), title = title, description = description, dueDate = dueDate, dueTime = dueTime, relatedNodeId = relatedNodeId, relatedNodePath = relatedNodePath, status = PlanningStatus.valueOf(status), createdAt = createdAt, updatedAt = updatedAt, syncStatus = syncStatus, version = version)
+    private fun PlanningItemUi.toEntity() = PlanningItemEntity(id = id, type = type.name, title = title, description = description, dueDate = dueDate, dueTime = dueTime, relatedNodeId = relatedNodeId, relatedNodePath = relatedNodePath, status = status.name, updatedAt = System.currentTimeMillis(), version = version, syncStatus = syncStatus)
 }

@@ -12,7 +12,11 @@ data class ScheduleException(
     val dateFrom: Long,
     val dateTo: Long,
     val affectsGeneration: Boolean = true,  // si bloquea la generación de instancias
+    val recurrenceType: RecurrenceType = RecurrenceType.NONE,
+    val weekday: Int? = null,               // 1=Lunes ... 7=Domingo (para WEEKLY)
     val createdAt: Long = System.currentTimeMillis(),
     val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
     val version: Int = 1
 )
+
+enum class RecurrenceType { NONE, WEEKLY, MONTHLY }

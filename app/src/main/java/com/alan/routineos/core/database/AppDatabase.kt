@@ -19,9 +19,10 @@ import com.alan.routineos.data.local.entities.*
         DayInstance::class,
         NodeOverride::class,
         ScheduleException::class,
-        NodeSchedule::class
+        NodeSchedule::class,
+        PlanningItemEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -38,4 +39,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun scheduleExceptionDao(): ScheduleExceptionDao
     abstract fun syncDao(): SyncDao
     abstract fun nodeScheduleDao(): NodeScheduleDao
+    abstract fun planningItemDao(): PlanningItemDao
 }

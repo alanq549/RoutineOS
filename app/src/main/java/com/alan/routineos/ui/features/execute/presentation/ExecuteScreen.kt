@@ -1,5 +1,6 @@
 package com.alan.routineos.ui.features.execute.presentation
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,14 +16,14 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.execute.components.DynamicField
 import com.alan.routineos.ui.features.execute.components.SessionHistoryCard
 import com.alan.routineos.ui.features.execute.viewmodel.ExecuteViewModel
 import com.alan.routineos.ui.theme.*
-import kotlinx.coroutines.delay
-import java.util.Locale
+import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,25 +33,77 @@ fun ExecuteScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val haptic = LocalHapticFeedback.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    var timerRunning by remember { mutableStateOf(false) }
-    var timeLeftSeconds by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(timerRunning, timeLeftSeconds) {
-        if (timerRunning && timeLeftSeconds > 0) {
-            delay(1000)
-            timeLeftSeconds--
-            if (timeLeftSeconds == 0) {
-                timerRunning = false
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-            }
+    LaunchedEffect(Unit) {
+        viewModel.events.collectLatest { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
         }
     }
 
-    LaunchedEffect(uiState.shouldStartTimer) {
-        uiState.shouldStartTimer?.let { minutes ->
-            timeLeftSeconds = minutes * 60
-            timerRunning = true
+    BackHandler {
+        viewModel.handleBackPress(onBack)
+    }
+
+    if (uiState.showExitConfirmation) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.setShowExitConfirmation(false) },
+            containerColor = ColorSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = ColorBorder) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Tienes cambios sin guardar",
+                    style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                    color = ColorText,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Si sales ahora, perderás los cambios que no hayas guardado.",
+                    style = MetaMono.copy(fontSize = 12.sp),
+                    color = ColorTextDim,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = { viewModel.saveChanges(onComplete = onBack) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("GUARDAR Y SALIR", style = TitleNode.copy(color = Color.White))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("DESCARTAR CAMBIOS", style = TitleNode)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = { viewModel.setShowExitConfirmation(false) }) {
+                    Text("SEGUIR EDITANDO", color = ColorTextDim, style = TitleNode)
+                }
+            }
         }
     }
 
@@ -65,8 +118,13 @@ fun ExecuteScreen(
                     )
                 },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = { viewModel.handleBackPress(onBack) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Regresar")
+                    }
+                },
+                actions = {
+                    TextButton(onClick = { viewModel.saveChanges() }) {
+                        Text("GUARDAR", color = ColorExec, style = TitleNode)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -75,6 +133,7 @@ fun ExecuteScreen(
                 )
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = ColorBg
     ) { paddingValues ->
         if (uiState.isLoading) {
@@ -103,20 +162,6 @@ fun ExecuteScreen(
                         color = ColorText
                     )
 
-                    if (timerRunning) {
-                        Text(
-                            text = String.format(
-                                Locale.getDefault(),
-                                "%02d:%02d",
-                                timeLeftSeconds / 60,
-                                timeLeftSeconds % 60
-                            ),
-                            style = MonoTimer,
-                            color = ColorExec,
-                            modifier = Modifier.padding(vertical = 16.dp)
-                        )
-                    }
-
                     Spacer(modifier = Modifier.height(32.dp))
 
                     uiState.schemas.forEach { schema ->
@@ -132,7 +177,7 @@ fun ExecuteScreen(
 
                     if (uiState.history.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(16.dp))
-                        Text("HISTORIAL DE LA SESIÓN", style = MetaMono, color = ColorTextMuted)
+                        Text("ÚLTIMOS VALORES REGISTRADOS", style = MetaMono, color = ColorTextMuted)
                         Spacer(modifier = Modifier.height(8.dp))
                         uiState.history.forEach { session ->
                             SessionHistoryCard(session)
@@ -152,7 +197,8 @@ fun ExecuteScreen(
                     Button(
                         onClick = {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.saveIteration()
+                            viewModel.saveAndComplete()
+                            onBack()
                         },
                         modifier = Modifier
                             .fillMaxWidth(0.9f)
@@ -160,13 +206,8 @@ fun ExecuteScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        val seriesField =
-                            uiState.schemas.find { it.fieldName.lowercase().contains("ser") }
-                        val isLast =
-                            (uiState.fieldValues[seriesField?.fieldName]?.toIntOrNull() ?: 1) <= 1
-
                         Text(
-                            if (seriesField != null && !isLast) "GUARDAR SET" else "GUARDAR Y FINALIZAR",
+                            "FINALIZAR ACTIVIDAD",
                             style = TitleNode.copy(
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold

@@ -140,6 +140,9 @@ fun AppNavHost(
             todayScreen(
                 onNavigateToExecute = { nodeId ->
                     navController.navigateToExecute(nodeId)
+                },
+                onNavigateToTemplateBuilder = { templateId ->
+                    navController.navigateToTemplateBuilder(templateId)
                 }
             )
 

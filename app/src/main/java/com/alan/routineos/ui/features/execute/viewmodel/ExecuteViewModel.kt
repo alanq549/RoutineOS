@@ -28,6 +28,9 @@ class ExecuteViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ExecuteUiState())
     val uiState = _uiState.asStateFlow()
 
+    private val _events = MutableSharedFlow<String>()
+    val events = _events.asSharedFlow()
+
     init {
         loadData()
     }
@@ -58,7 +61,8 @@ class ExecuteViewModel @Inject constructor(
                     schemas = schemas,
                     fieldValues = draft,
                     history = history,
-                    isLoading = false
+                    isLoading = false,
+                    hasUnsavedChanges = false // Reset on load
                 ) }
             }.collect()
         }
@@ -66,36 +70,38 @@ class ExecuteViewModel @Inject constructor(
 
     fun updateDraftValue(fieldName: String, value: String) {
         _uiState.update { it.copy(
-            fieldValues = it.fieldValues + (fieldName to value)
+            fieldValues = it.fieldValues + (fieldName to value),
+            hasUnsavedChanges = true
         ) }
     }
 
-    fun saveIteration() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val node = state.node
-            
-            if (node == null) {
-                Log.d("EXECUTE_DEBUG", "EXECUTE NODE NOT FOUND id=$nodeId")
-                return@launch
-            }
+    fun setShowExitConfirmation(show: Boolean) {
+        _uiState.update { it.copy(showExitConfirmation = show) }
+    }
 
-            Log.d("EXECUTE_DEBUG", "EXECUTE SAVE CALLED")
+    fun handleBackPress(onNavigateBack: () -> Unit) {
+        if (uiState.value.hasUnsavedChanges) {
+            setShowExitConfirmation(true)
+        } else {
+            onNavigateBack()
+        }
+    }
+
+    /**
+     * Persists all current draft values to the database.
+     * Uses nodeId + schemaId to ensure upsert behavior.
+     */
+    fun saveChanges(onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val state = uiState.value
+            val node = state.node ?: return@launch
             val timestamp = System.currentTimeMillis()
-            
-            _uiState.update { it.copy(shouldStartTimer = null) }
 
             state.fieldValues.forEach { (fieldName, value) ->
                 val schema = state.schemas.find { it.fieldName == fieldName } ?: return@forEach
-                
-                // REGLA FASE 3: Evitar duplicados por nodeId + schemaId
                 val existingValue = valueRepo.getByNodeAndSchema(node.id, schema.id)
-                
+
                 if (existingValue != null) {
-                    Log.d(
-                        "EXECUTE_DEBUG", 
-                        "FIELD UPSERT MODE=UPDATE nodeId=${node.id} schemaId=${schema.id} field=$fieldName old=${existingValue.value} new=$value"
-                    )
                     valueRepo.update(
                         existingValue.copy(
                             value = value,
@@ -104,10 +110,6 @@ class ExecuteViewModel @Inject constructor(
                         )
                     )
                 } else {
-                    Log.d(
-                        "EXECUTE_DEBUG", 
-                        "FIELD UPSERT MODE=INSERT nodeId=${node.id} schemaId=${schema.id} field=$fieldName value=$value"
-                    )
                     valueRepo.upsert(
                         NodeFieldValue(
                             id = UUID.randomUUID().toString(),
@@ -121,43 +123,27 @@ class ExecuteViewModel @Inject constructor(
                     )
                 }
             }
-
-            val seriesField = state.schemas.find { 
-                val name = it.fieldName.lowercase()
-                name.contains("ser") || name.contains("set") 
-            }
             
-            var durationToStart: Int? = null
-            if (state.nodeType?.hasMetricFields == true) {
-                val durationField = state.schemas.find { it.fieldType == FieldType.DURATION }
-                if (durationField != null) {
-                    durationToStart = state.fieldValues[durationField.fieldName]?.toIntOrNull()
-                }
-            }
-
-            if (seriesField != null) {
-                val currentSeries = state.fieldValues[seriesField.fieldName]?.toIntOrNull() ?: 0
-                if (currentSeries > 1) {
-                    updateDraftValue(seriesField.fieldName, (currentSeries - 1).toString())
-                    _uiState.update { it.copy(shouldStartTimer = durationToStart) }
-                } else {
-                    completeNode()
-                }
-            } else {
-                completeNode()
-            }
+            _uiState.update { it.copy(hasUnsavedChanges = false, showExitConfirmation = false) }
+            _events.emit("Cambios guardados")
+            onComplete?.invoke()
         }
     }
 
-    fun completeNode() {
+    /**
+     * Saves all changes and marks the node as COMPLETED.
+     */
+    fun saveAndComplete() {
         viewModelScope.launch {
-            val node = _uiState.value.node ?: return@launch
+            saveChanges()
+            val node = uiState.value.node ?: return@launch
             nodeRepo.update(node.copy(
-                status = NodeStatus.COMPLETED, 
+                status = NodeStatus.COMPLETED,
                 updatedAt = System.currentTimeMillis(),
                 syncStatus = SyncStatus.PENDING_SYNC,
                 version = node.version + 1
             ))
+            _events.emit("Actividad completada")
         }
     }
 }

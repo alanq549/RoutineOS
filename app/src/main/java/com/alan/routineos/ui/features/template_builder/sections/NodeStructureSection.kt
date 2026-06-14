@@ -1,13 +1,16 @@
 package com.alan.routineos.ui.features.template_builder.sections
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material3.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.Node
@@ -15,12 +18,14 @@ import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeType
-import com.alan.routineos.ui.features.template_builder.components.AddDashedButton
 import com.alan.routineos.ui.features.template_builder.components.NodeItem
 import com.alan.routineos.ui.features.template_builder.components.SectionHeader
 import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.TitleNode
 
 fun LazyListScope.nodeStructureSection(
     nodes: List<Node>,
@@ -36,7 +41,6 @@ fun LazyListScope.nodeStructureSection(
     onUpdateNodeName: (nodeId: String, name: String) -> Unit,
     onUpdateNodeType: (nodeId: String, typeId: String) -> Unit,
     onUpdateFieldValue: (nodeId: String, schemaId: String, fieldName: String, value: String) -> Unit,
-    onAddNodeFull: (name: String, typeId: String, parentId: String?) -> Unit = { _, _, _ -> },
     onDeleteNode: (nodeId: String) -> Unit,
     onScheduleClick: (Node) -> Unit,
     onManageDetailsClick: () -> Unit
@@ -50,20 +54,13 @@ fun LazyListScope.nodeStructureSection(
         
         Column(modifier = Modifier.padding(horizontal = 14.dp)) {
             Text(
-                "Divide esta actividad en bloques, pasos o materias.",
-                style = MetaMono.copy(fontSize = 8.sp),
+                "Organiza tu rutina en bloques de tiempo o tareas secuenciales.",
+                style = MetaMono.copy(fontSize = 10.sp),
                 color = ColorTextDim
             )
         }
         
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        AddDashedButton(
-            text = "Agregar bloques o subbloques",
-            onClick = onManageDetailsClick
-        )
-        
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     val rootNodes = nodes.filter { it.parentId == null }
@@ -91,9 +88,30 @@ fun LazyListScope.nodeStructureSection(
     }
 
     item {
-        Spacer(modifier = Modifier.height(12.dp))
-        AddDashedButton(text = "agregar bloque principal", onClick = { onAddNode(null) })
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Button(
+            onClick = { onAddNode(null) },
+            modifier = Modifier
+                .padding(horizontal = 14.dp)
+                .fillMaxWidth()
+                .height(48.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ColorSurface,
+                contentColor = ColorExec
+            ),
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ColorExec.copy(alpha = 0.3f))
+        ) {
+            Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, null, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                "AGREGAR BLOQUE PRINCIPAL",
+                style = TitleNode.copy(fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(40.dp))
     }
 }
 
@@ -148,7 +166,6 @@ private fun NodeHierarchy(
                 activityEnd = activityEnd
             )
         } else {
-             // Si no hay padre, el "rango superior" es la actividad
              if (activityDays.isNotEmpty() && activityStart != null) {
                  activityDays.map { day -> 
                      NodeSchedule(nodeId = node.id, dayOfWeek = day, startTime = activityStart, endTime = activityEnd ?: activityStart)
@@ -182,6 +199,7 @@ private fun NodeHierarchy(
         onScheduleClick = { onScheduleClick(node) },
         onManageDetailsClick = onManageDetailsClick
     )
+
     children.forEach { child ->
         NodeHierarchy(
             node = child,

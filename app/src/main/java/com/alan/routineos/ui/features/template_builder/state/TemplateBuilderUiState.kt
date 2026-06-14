@@ -5,18 +5,14 @@ import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeType
-import com.alan.routineos.ui.features.template_builder.sections.ContextCategory
-import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 
 data class TemplateBuilderUiState(
     val templateId: String? = null,
     val name: String = "",
-    val category: ContextCategory = ContextCategory.FLEXIBLE,
     val colorHex: String = "#3FB950",
     
     // Temporal State
     val selectedDays: Set<Int> = emptySet(),
-    val timeMode: TimeMode = TimeMode.RANGE,
     val startTime: String = "08:00",
     val endTime: String = "09:00",
     val durationMinutes: Int = 60,
@@ -30,5 +26,8 @@ data class TemplateBuilderUiState(
     val dirtyScheduleNodeIds: Set<String> = emptySet(),
 
     val isLoading: Boolean = true,
-    val isSaving: Boolean = false
+    val isSaving: Boolean = false,
+    
+    val hasUnsavedChanges: Boolean = false,
+    val showExitConfirmation: Boolean = false
 )

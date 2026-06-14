@@ -9,7 +9,6 @@ import com.alan.routineos.data.repository.InstanceRepository
 import com.alan.routineos.data.repository.NodeRepository
 import com.alan.routineos.data.repository.ScheduleRepository
 import com.alan.routineos.data.repository.TemplateRepository
-import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -45,8 +44,7 @@ class LibraryViewModel @Inject constructor(
                     colorHex = def.colorHex,
                     blocksSummary = if (templateNodes.isEmpty()) "Sin bloques" else "${templateNodes.size} bloques",
                     activeDays = templateSchedules.map { it.weekday - 1 },
-                    timeLabel = formatHumanTimeLabel(def.timeMode, templateSchedules),
-                    timeMode = def.timeMode
+                    timeLabel = formatHumanTimeLabel(templateSchedules)
                 )
             },
             searchQuery = query,
@@ -58,14 +56,17 @@ class LibraryViewModel @Inject constructor(
         initialValue = LibraryUiState(isLoading = true)
     )
 
-    private fun formatHumanTimeLabel(mode: TimeMode, schedules: List<Schedule>): String? {
-        if (schedules.isEmpty()) return if (mode == TimeMode.FLEXIBLE) "Horario flexible" else null
-        val first = schedules.first()
-        return when (mode) {
-            TimeMode.FIXED_START -> "Inicia: ${first.startTime}"
-            TimeMode.RANGE -> "Rango: ${first.startTime} – ${first.endTime}"
-            TimeMode.DURATION -> "Inicia: ${first.startTime}"
-            TimeMode.FLEXIBLE -> "Flexible"
+    private fun formatHumanTimeLabel(schedules: List<Schedule>): String? {
+        if (schedules.isEmpty()) return "Flexible"
+        val first = schedules.firstOrNull() ?: return "Flexible"
+        return if (first.startTime != null) {
+            if (first.endTime != null && first.startTime != first.endTime) {
+                "${first.startTime} – ${first.endTime}"
+            } else {
+                "Inicia: ${first.startTime}"
+            }
+        } else {
+            "Flexible"
         }
     }
 
@@ -78,7 +79,8 @@ class LibraryViewModel @Inject constructor(
             try {
                 Log.d("TODAY_DEBUG", "LIBRARY USE TODAY REQUEST templateId=$id")
                 val today = DateUtils.getStartOfDay()
-                val instance = instanceRepo.useTemplateForDate(id, today, forceRegenerate = false)
+                // Replaced useTemplateForDate with generateInstanceIfNeeded
+                val instance = instanceRepo.generateInstanceIfNeeded(id, today)
                 
                 if (instance != null) {
                     Log.d("TODAY_DEBUG", "LIBRARY USE TODAY SUCCESS templateId=$id")

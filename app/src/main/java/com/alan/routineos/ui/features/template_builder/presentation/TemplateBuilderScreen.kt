@@ -1,39 +1,24 @@
 package com.alan.routineos.ui.features.template_builder.presentation
 
 import android.util.Log
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.core.util.ScheduleResolver
@@ -42,17 +27,14 @@ import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSh
 import com.alan.routineos.ui.features.template_builder.sections.ActivityIdentitySection
 import com.alan.routineos.ui.features.template_builder.sections.AdvancedSection
 import com.alan.routineos.ui.features.template_builder.sections.ColorSection
-import com.alan.routineos.ui.features.template_builder.sections.QuickPresetsSection
 import com.alan.routineos.ui.features.template_builder.sections.RepeatSection
-import com.alan.routineos.ui.features.template_builder.sections.TimeMode
 import com.alan.routineos.ui.features.template_builder.sections.TimeRangeSection
 import com.alan.routineos.ui.features.template_builder.sections.nodeStructureSection
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
-import com.alan.routineos.ui.theme.ColorBg
-import com.alan.routineos.ui.theme.ColorExec
-import com.alan.routineos.ui.theme.ColorSurface
-import com.alan.routineos.ui.theme.TitleNode
+import com.alan.routineos.ui.theme.*
+import kotlinx.coroutines.flow.collectLatest
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TemplateBuilderScreen(
     onBack: () -> Unit,
@@ -62,6 +44,7 @@ fun TemplateBuilderScreen(
     val uiState by viewModel.uiState.collectAsState()
     var selectedNodeForSchedule by remember { mutableStateOf<Node?>(null) }
     var showStructure by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val colors = listOf(
         Color(0xFFF44336), Color(0xFFFF9800), Color(0xFFFFC107),
@@ -69,19 +52,78 @@ fun TemplateBuilderScreen(
         Color(0xFF795548), Color(0xFF607D8B)
     )
 
-    // FIX 8.3 — Human Validation Logic
-    val isTimeValid = when (uiState.timeMode) {
-        TimeMode.FIXED_START -> uiState.startTime.isNotBlank() && uiState.startTime != "--:--"
-        TimeMode.RANGE -> uiState.startTime.isNotBlank() && uiState.startTime != "--:--" && 
-                         uiState.endTime.isNotBlank() && uiState.endTime != "--:--"
-        TimeMode.DURATION -> uiState.durationMinutes > 0
-        TimeMode.FLEXIBLE -> true
-    }
-    
-    val canSave = uiState.name.isNotBlank() && isTimeValid
+    val canSave = uiState.name.isNotBlank() && uiState.startTime.isNotBlank() && uiState.startTime != "--:--"
 
-    LaunchedEffect(canSave, uiState.timeMode) {
-        Log.d("TEMPLATE_UX_DEBUG", "TEMPLATE VALIDATION mode=${uiState.timeMode} valid=$canSave")
+    LaunchedEffect(Unit) {
+        viewModel.events.collectLatest { message ->
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+        }
+    }
+
+    BackHandler {
+        viewModel.handleBackPress(onBack)
+    }
+
+    if (uiState.showExitConfirmation) {
+        ModalBottomSheet(
+            onDismissRequest = { viewModel.setShowExitConfirmation(false) },
+            containerColor = ColorSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = ColorBorder) }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .padding(bottom = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Tienes cambios sin guardar",
+                    style = TitleNode.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+                    color = ColorText,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Si sales ahora, perderás los cambios que no hayas guardado.",
+                    style = MetaMono.copy(fontSize = 12.sp),
+                    color = ColorTextDim,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = { viewModel.saveTemplate(onSuccess = onBack) },
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("GUARDAR Y SALIR", style = TitleNode.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("DESCARTAR CAMBIOS", style = TitleNode)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(onClick = { viewModel.setShowExitConfirmation(false) }) {
+                    Text("SEGUIR EDITANDO", color = ColorTextDim, style = TitleNode)
+                }
+            }
+        }
     }
 
     Scaffold(
@@ -89,16 +131,16 @@ fun TemplateBuilderScreen(
             TemplateBuilderTopBar(
                 isNewTemplate = uiState.templateId == null,
                 canSave = canSave,
-                onBack = onBack,
+                hasChanges = uiState.hasUnsavedChanges,
+                onBack = { viewModel.handleBackPress(onBack) },
                 onSave = {
                     if (canSave) {
                         viewModel.saveTemplate(onSuccess = onBack)
-                    } else {
-                        Log.d("TEMPLATE_UX_DEBUG", "SAVE BLOCKED reason=invalid_fields")
                     }
                 }
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = ColorBg
     ) { paddingValues ->
         LazyColumn(
@@ -106,18 +148,13 @@ fun TemplateBuilderScreen(
                 .padding(paddingValues)
                 .fillMaxSize()
         ) {
-            // 1. IDENTITY
             item {
                 ActivityIdentitySection(
                     name = uiState.name,
-                    onNameChange = viewModel::updateName,
-                    selectedCategory = uiState.category,
-                    onCategoryChange = viewModel::updateCategory
+                    onNameChange = viewModel::updateName
                 )
             }
 
-
-            // 6. APARIENCIA
             item {
                 AdvancedSection(title = "APARIENCIA") {
                     Column(modifier = Modifier.padding(bottom = 24.dp)) {
@@ -130,47 +167,27 @@ fun TemplateBuilderScreen(
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(48.dp))
-            }
+            item { Spacer(modifier = Modifier.height(48.dp)) }
 
-            // 2. QUICK START (Presets)
-            if (uiState.templateId == null && uiState.name.isBlank()) {
-                item {
-                    QuickPresetsSection(onSelect = { preset ->
-                        viewModel.updateName(preset.name)
-                        viewModel.updateColor(preset.colorHex)
-                        viewModel.updateCategory(preset.category)
-                    })
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-            }
-
-            // 3. TEMPORAL: ¿QUÉ TAN FIJA ES ESTA ACTIVIDAD?
             item {
                 TimeRangeSection(
-                    selectedMode = uiState.timeMode,
                     startTime = uiState.startTime,
                     endTime = uiState.endTime,
                     durationMinutes = uiState.durationMinutes,
                     hasNodeSchedules = uiState.nodeSchedules.any { it.value.isNotEmpty() },
-                    onModeChange = viewModel::updateTimeMode,
                     onStartTimeChange = viewModel::updateStartTime,
                     onEndTimeChange = viewModel::updateEndTime,
                     onDurationChange = viewModel::updateDurationMinutes
                 )
             }
 
-            // 4. RECURRENCE: ¿QUÉ DÍAS PUEDE APARECER?
             item {
                 RepeatSection(
                     selectedDays = uiState.selectedDays,
-                    timeMode = uiState.timeMode,
                     onToggleDay = viewModel::toggleDay
                 )
             }
 
-            // 5. ESTRUCTURA INTERNA (BLOQUES)
             if (!showStructure && uiState.nodes.isEmpty()) {
                 item {
                     Box(
@@ -178,15 +195,24 @@ fun TemplateBuilderScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                             .clickable { showStructure = true }
-                            .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(8.dp))
-                            .padding(16.dp),
+                            .border(1.dp, ColorBorder, RoundedCornerShape(12.dp))
+                            .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            "Agregar bloques a esta actividad",
-                            style = TitleNode.copy(fontSize = 10.sp, letterSpacing = 1.sp),
-                            color = ColorExec
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Default.Add, null, tint = ColorExec, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                "DEFINIR ESTRUCTURA INTERNA",
+                                style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold),
+                                color = ColorText
+                            )
+                            Text(
+                                "Divide esta rutina en bloques o tareas",
+                                style = MetaMono.copy(fontSize = 9.sp),
+                                color = ColorTextDim
+                            )
+                        }
                     }
                 }
             } else {
@@ -200,9 +226,7 @@ fun TemplateBuilderScreen(
                     activityDays = uiState.selectedDays,
                     activityStart = uiState.startTime,
                     activityEnd = uiState.endTime,
-                    onAddNode = { parentId ->
-                        viewModel.addNode("", "default", parentId)
-                    },
+                    onAddNode = { parentId -> viewModel.addNode("", "default", parentId) },
                     onUpdateNodeName = viewModel::updateNodeName,
                     onUpdateNodeType = viewModel::updateNodeType,
                     onUpdateFieldValue = viewModel::updateFieldValue,
@@ -211,7 +235,6 @@ fun TemplateBuilderScreen(
                     onManageDetailsClick = onNavigateToTypeManager
                 )
             }
-
         }
 
         if (selectedNodeForSchedule != null) {
@@ -254,6 +277,7 @@ fun TemplateBuilderScreen(
 private fun TemplateBuilderTopBar(
     isNewTemplate: Boolean,
     canSave: Boolean,
+    hasChanges: Boolean = false,
     onBack: () -> Unit,
     onSave: () -> Unit
 ) {
@@ -265,39 +289,44 @@ private fun TemplateBuilderTopBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
+        IconButton(
+            onClick = onBack,
             modifier = Modifier
-                .size(32.dp)
+                .size(36.dp)
                 .background(ColorSurface, CircleShape)
-                .border(0.5.dp, Color(0xFF2A2A2A), CircleShape)
-                .clickable { onBack() },
-            contentAlignment = Alignment.Center
+                .border(0.5.dp, ColorBorder, CircleShape)
         ) {
             Icon(
                 Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = Color(0xFF777777),
-                modifier = Modifier.size(16.dp)
+                contentDescription = "Regresar",
+                tint = ColorTextDim,
+                modifier = Modifier.size(20.dp)
             )
         }
 
         Text(
             text = if (isNewTemplate) "NUEVA ACTIVIDAD" else "EDITAR ACTIVIDAD",
-            style = TitleNode.copy(fontSize = 11.sp, letterSpacing = 1.2.sp),
-            color = Color.White
+            style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold),
+            color = ColorText
         )
 
-        Surface(
+        Button(
             onClick = onSave,
-            color = if (canSave) ColorExec else Color(0xFF1A1A1A),
-            shape = RoundedCornerShape(6.dp),
-            enabled = canSave
+            enabled = canSave,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (hasChanges) ColorExec else ColorSurface,
+                contentColor = if (hasChanges) Color.White else ColorExec,
+                disabledContainerColor = ColorSurface.copy(alpha = 0.5f),
+                disabledContentColor = ColorTextMuted
+            ),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+            modifier = Modifier.height(36.dp),
+            border = if (!hasChanges && canSave) androidx.compose.foundation.BorderStroke(1.dp, ColorExec.copy(alpha = 0.5f)) else null
         ) {
             Text(
-                "LISTO",
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                style = TitleNode.copy(fontSize = 10.sp),
-                color = if (canSave) Color.White else Color(0xFF444444)
+                text = "GUARDAR",
+                style = TitleNode.copy(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
             )
         }
     }

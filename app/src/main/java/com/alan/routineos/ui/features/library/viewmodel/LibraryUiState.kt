@@ -1,7 +1,5 @@
 package com.alan.routineos.ui.features.library.viewmodel
 
-import com.alan.routineos.ui.features.template_builder.sections.TimeMode
-
 data class LibraryUiState(
     val definitions: List<ActivityDefinitionUi> = emptyList(),
     val searchQuery: String = "",
@@ -15,6 +13,5 @@ data class ActivityDefinitionUi(
     val colorHex: String,
     val blocksSummary: String,
     val activeDays: List<Int>,
-    val timeLabel: String?,
-    val timeMode: TimeMode
+    val timeLabel: String?
 )

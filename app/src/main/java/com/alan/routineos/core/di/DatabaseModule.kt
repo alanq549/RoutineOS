@@ -64,4 +64,7 @@ object DatabaseModule {
 
     @Provides
     fun provideNodeScheduleDao(db: AppDatabase): NodeScheduleDao = db.nodeScheduleDao()
+
+    @Provides
+    fun providePlanningItemDao(db: AppDatabase): PlanningItemDao = db.planningItemDao()
 }

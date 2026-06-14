@@ -24,7 +24,7 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE instanceId IS NULL AND deletedAt IS NULL")
     suspend fun getAllTemplateNodesSync(): List<Node>
 
-    @Query("SELECT * FROM nodes WHERE templateId = :templateNodeId AND instanceId IS NOT NULL AND id != :currentNodeId ORDER BY createdAt DESC LIMIT 10")
+    @Query("SELECT * FROM nodes WHERE sourceTemplateNodeId = :templateNodeId AND instanceId IS NOT NULL AND id != :currentNodeId ORDER BY createdAt DESC LIMIT 10")
     suspend fun getPreviousInstances(templateNodeId: String, currentNodeId: String): List<Node>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

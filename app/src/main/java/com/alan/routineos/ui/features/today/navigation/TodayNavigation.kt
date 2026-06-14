@@ -15,13 +15,15 @@ fun NavController.navigateToToday(navOptions: NavOptions? = null) {
 }
 
 fun NavGraphBuilder.todayScreen(
-    onNavigateToExecute: (String) -> Unit
+    onNavigateToExecute: (String) -> Unit,
+    onNavigateToTemplateBuilder: (String) -> Unit
 ) {
     composable(TODAY_ROUTE) {
         val viewModel: TodayViewModel = hiltViewModel()
         TodayScreen(
             viewModel = viewModel,
-            onNavigateToExecute = onNavigateToExecute
+            onNavigateToExecute = onNavigateToExecute,
+            onNavigateToTemplateBuilder = onNavigateToTemplateBuilder
         )
     }
 }
