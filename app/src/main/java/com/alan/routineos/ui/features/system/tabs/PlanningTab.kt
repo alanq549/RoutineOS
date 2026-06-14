@@ -36,7 +36,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.RecurrenceType
 import com.alan.routineos.data.local.entities.ScheduleException
 import com.alan.routineos.ui.features.system.components.AdaptationCard
@@ -62,12 +61,11 @@ import com.alan.routineos.ui.theme.TitleNode
 @Composable
 fun PlanningTab(
     state: SystemUiState,
-    allNodes: List<Node>,
     onSubTabSelected: (PlanningSection) -> Unit,
     onDateSelected: (Long) -> Unit,
     onNextWeek: () -> Unit,
     onPrevWeek: () -> Unit,
-    onCreateAdaptation: (String, String, Int, RecurrenceType) -> Unit,
+    onCreateAdaptation: (String, Int, RecurrenceType) -> Unit,
     onDeleteAdaptation: (ScheduleException) -> Unit,
     onCreatePlanningItem: (String, String?, PlanningItemType, String?, String?, Long?, String?) -> Unit,
     onUpdatePlanningItem: (String, String, String?, String?, String?, Long?, String?) -> Unit,
@@ -148,8 +146,8 @@ fun PlanningTab(
     if (showNewAdaptation) {
         NewAdaptationSheet(
             onDismiss = { showNewAdaptation = false },
-            onConfirm = { label, type, rangeType, recurrence ->
-                onCreateAdaptation(label, type, rangeType, recurrence)
+            onConfirm = { label, rangeType, recurrenceType ->
+                onCreateAdaptation(label, rangeType, recurrenceType)
                 showNewAdaptation = false
             }
         )

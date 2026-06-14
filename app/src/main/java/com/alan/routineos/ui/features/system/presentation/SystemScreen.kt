@@ -85,7 +85,6 @@ fun SystemScreen(
                 0 -> ActivitiesTab(onNavigateToBuilder = onNavigateToBuilder)
                 1 -> PlanningTab(
                     state = uiState,
-                    allNodes = uiState.allNodes,
                     onSubTabSelected = viewModel::setPlanningSubTab,
                     onDateSelected = viewModel::selectDate,
                     onNextWeek = viewModel::nextWeek,

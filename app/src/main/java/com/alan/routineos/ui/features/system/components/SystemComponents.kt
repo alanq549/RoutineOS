@@ -358,7 +358,7 @@ fun PlanningItemCard(
 @Composable
 fun NewAdaptationSheet(
     onDismiss: () -> Unit,
-    onConfirm: (label: String, type: String, rangeType: Int, recurrence: RecurrenceType) -> Unit
+    onConfirm: (label: String, rangeType: Int, recurrence: RecurrenceType) -> Unit
 ) {
     var intention by remember { mutableStateOf<AdaptationIntention?>(null) }
     var strategy by remember { mutableStateOf(AdjustmentStrategy.PAUSE_ALL) }
@@ -483,7 +483,6 @@ fun NewAdaptationSheet(
                         onClick = {
                             onConfirm(
                                 intention?.label ?: "Adaptación",
-                                intention?.name ?: "CUSTOM",
                                 rangeType,
                                 recurrence
                             )

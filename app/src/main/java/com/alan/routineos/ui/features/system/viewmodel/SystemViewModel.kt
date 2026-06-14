@@ -47,7 +47,6 @@ class SystemViewModel @Inject constructor(
             val targets = buildPlanningTargets(allNodes)
             val items = itemsEntities.map { it.toUi() }
 
-            // Filter: show items due on selectedDate OR items with no due date
             val filteredItems = items.filter { item ->
                 item.dueDate == null || DateUtils.getStartOfDay(item.dueDate) == selectedDate
             }.sortedWith(
@@ -98,7 +97,7 @@ class SystemViewModel @Inject constructor(
         _currentWeekStart.value = calendar.timeInMillis
     }
 
-    fun createAdaptation(label: String, type: String, rangeType: Int, recurrence: RecurrenceType = RecurrenceType.NONE) {
+    fun createAdaptation(label: String, rangeType: Int, recurrence: RecurrenceType = RecurrenceType.NONE) {
         viewModelScope.launch {
             val from: Long
             val to: Long
@@ -131,6 +130,7 @@ class SystemViewModel @Inject constructor(
                 weekday = if (recurrence == RecurrenceType.WEEKLY) weekday else if (recurrence == RecurrenceType.MONTHLY) calendar.get(Calendar.DAY_OF_MONTH) else null
             )
             exceptionRepo.upsert(exception)
+            Log.d("PLANNING_DEBUG", "ROUTINE_CHANGE CREATE label=$label from=$from recurrence=$recurrence")
             
             if (recurrence == RecurrenceType.NONE) {
                 refreshInstancesInRange(from, to)
@@ -143,6 +143,7 @@ class SystemViewModel @Inject constructor(
     fun deleteAdaptation(adaptation: ScheduleException) {
         viewModelScope.launch {
             exceptionRepo.delete(adaptation)
+            Log.d("PLANNING_DEBUG", "ROUTINE_CHANGE DELETE id=${adaptation.id}")
             if (adaptation.recurrenceType == RecurrenceType.NONE) {
                 refreshInstancesInRange(adaptation.dateFrom, adaptation.dateTo)
             } else {
@@ -201,7 +202,11 @@ class SystemViewModel @Inject constructor(
         }
     }
 
-    fun deletePlanningItem(id: String) = viewModelScope.launch { planningRepo.deletePlanningItem(id) }
+    fun deletePlanningItem(id: String) {
+        viewModelScope.launch {
+            planningRepo.deletePlanningItem(id)
+        }
+    }
 
     private fun buildPlanningTargets(nodes: List<Node>): List<PlanningTargetUi> {
         val nodeMap = nodes.associateBy { it.id }

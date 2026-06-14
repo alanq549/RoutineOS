@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingFlat
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -124,7 +125,7 @@ fun TodayActivityCard(
             )
             if (wasShiftedByDomino && dominoReason != null) {
                 Icon(
-                    Icons.Default.TrendingFlat,
+                    Icons.AutoMirrored.Filled.TrendingFlat,
                     contentDescription = null,
                     tint = ColorExec.copy(alpha = 0.7f),
                     modifier = Modifier.size(10.dp).padding(top = 2.dp)
