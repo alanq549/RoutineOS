@@ -3,7 +3,19 @@ package com.alan.routineos.core.di
 import android.content.Context
 import androidx.room.Room
 import com.alan.routineos.core.database.AppDatabase
-import com.alan.routineos.data.local.dao.*
+import com.alan.routineos.data.local.dao.DayInstanceDao
+import com.alan.routineos.data.local.dao.FieldValueDao
+import com.alan.routineos.data.local.dao.MetadataSchemaDao
+import com.alan.routineos.data.local.dao.NodeDao
+import com.alan.routineos.data.local.dao.NodeOverrideDao
+import com.alan.routineos.data.local.dao.NodeScheduleDao
+import com.alan.routineos.data.local.dao.NodeTypeDao
+import com.alan.routineos.data.local.dao.PlanningItemDao
+import com.alan.routineos.data.local.dao.ScheduleDao
+import com.alan.routineos.data.local.dao.ScheduleExceptionDao
+import com.alan.routineos.data.local.dao.SyncDao
+import com.alan.routineos.data.local.dao.TemplateDao
+import com.alan.routineos.data.local.dao.UserDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,6 +27,7 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+
     @Provides
     @Singleton
     fun provideDatabase(
@@ -25,8 +38,8 @@ object DatabaseModule {
             AppDatabase::class.java,
             "app_db"
         )
-        .fallbackToDestructiveMigration()
-        .build()
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
@@ -57,7 +70,8 @@ object DatabaseModule {
     fun provideNodeOverrideDao(db: AppDatabase): NodeOverrideDao = db.nodeOverrideDao()
 
     @Provides
-    fun provideScheduleExceptionDao(db: AppDatabase): ScheduleExceptionDao = db.scheduleExceptionDao()
+    fun provideScheduleExceptionDao(db: AppDatabase): ScheduleExceptionDao =
+        db.scheduleExceptionDao()
 
     @Provides
     fun provideSyncDao(db: AppDatabase): SyncDao = db.syncDao()

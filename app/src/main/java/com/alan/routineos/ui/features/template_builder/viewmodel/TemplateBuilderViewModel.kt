@@ -1,21 +1,38 @@
 package com.alan.routineos.ui.features.template_builder.viewmodel
 
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
-import com.alan.routineos.data.local.entities.*
-import com.alan.routineos.data.repository.*
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeFieldValue
+import com.alan.routineos.data.local.entities.NodeSchedule
+import com.alan.routineos.data.local.entities.RoutineTemplate
+import com.alan.routineos.data.local.entities.Schedule
+import com.alan.routineos.data.local.entities.SyncStatus
+import com.alan.routineos.data.local.entities.TemporalMode
+import com.alan.routineos.data.repository.FieldValueRepository
+import com.alan.routineos.data.repository.InstanceRepository
+import com.alan.routineos.data.repository.MetadataSchemaRepository
+import com.alan.routineos.data.repository.NodeRepository
+import com.alan.routineos.data.repository.NodeTypeRepository
+import com.alan.routineos.data.repository.ScheduleRepository
+import com.alan.routineos.data.repository.TemplateRepository
+import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_COLOR_ARG
+import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_NAME_ARG
 import com.alan.routineos.ui.features.template_builder.state.TemplateBuilderUiState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.UUID
 import javax.inject.Inject
-import androidx.lifecycle.SavedStateHandle
-import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_COLOR_ARG
-import com.alan.routineos.ui.features.template_builder.navigation.INITIAL_NAME_ARG
 
 @HiltViewModel
 class TemplateBuilderViewModel @Inject constructor(
@@ -61,16 +78,22 @@ class TemplateBuilderViewModel @Inject constructor(
                     val allTemplateNodes = nodeRepo.getAllByTemplate(template.id)
                     val rootNodeId = template.rootNodeId
                     val rootNode = allTemplateNodes.find { it.id == rootNodeId }
-                    
+
                     val globalSchedules = scheduleRepo.getByTemplate(template.id).first()
                     val firstSchedule = globalSchedules.firstOrNull()
-                    
-                    val dbStartTime = firstSchedule?.startTime ?: rootNode?.scheduledTime ?: "08:00"
-                    val dbEndTime = firstSchedule?.endTime ?: rootNode?.durationMinutes?.let { calculateEndTime(dbStartTime, it) } ?: "09:00"
 
-                    val nodesForEditor = allTemplateNodes.filter { it.id != rootNodeId }.map { node ->
-                        if (node.parentId == rootNodeId) node.copy(parentId = null) else node
-                    }
+                    val dbStartTime = firstSchedule?.startTime ?: rootNode?.scheduledTime ?: "08:00"
+                    val dbEndTime = firstSchedule?.endTime ?: rootNode?.durationMinutes?.let {
+                        calculateEndTime(
+                            dbStartTime,
+                            it
+                        )
+                    } ?: "09:00"
+
+                    val nodesForEditor =
+                        allTemplateNodes.filter { it.id != rootNodeId }.map { node ->
+                            if (node.parentId == rootNodeId) node.copy(parentId = null) else node
+                        }
 
                     val schedulesMap = allTemplateNodes.associate {
                         it.id to nodeRepo.getSchedulesForNode(it.id).first()
@@ -102,6 +125,7 @@ class TemplateBuilderViewModel @Inject constructor(
                             startTime = dbStartTime,
                             endTime = dbEndTime,
                             durationMinutes = duration,
+                            temporalMode = rootNode?.temporalMode ?: TemporalMode.START_END,
                             isLoading = false,
                             hasUnsavedChanges = false // Reset after load
                         )
@@ -123,14 +147,24 @@ class TemplateBuilderViewModel @Inject constructor(
 
     fun toggleDay(day: Int) {
         _uiState.update { state ->
-            val newDays = if (state.selectedDays.contains(day)) state.selectedDays - day else state.selectedDays + day
+            val newDays =
+                if (state.selectedDays.contains(day)) state.selectedDays - day else state.selectedDays + day
             state.copy(selectedDays = newDays, hasUnsavedChanges = true)
         }
     }
 
-    fun updateStartTime(time: String) = _uiState.update { it.copy(startTime = time, hasUnsavedChanges = true) }
-    fun updateEndTime(time: String) = _uiState.update { it.copy(endTime = time, hasUnsavedChanges = true) }
-    fun updateDurationMinutes(minutes: Int) = _uiState.update { it.copy(durationMinutes = minutes, hasUnsavedChanges = true) }
+    fun updateStartTime(time: String) =
+        _uiState.update { it.copy(startTime = time, hasUnsavedChanges = true) }
+
+    fun updateEndTime(time: String) =
+        _uiState.update { it.copy(endTime = time, hasUnsavedChanges = true) }
+
+    fun updateTemporalMode(mode: TemporalMode) {
+        _uiState.update { state -> state.copy(temporalMode = mode, hasUnsavedChanges = true) }
+    }
+
+    fun updateDurationMinutes(minutes: Int) =
+        _uiState.update { it.copy(durationMinutes = minutes, hasUnsavedChanges = true) }
 
     fun setShowExitConfirmation(show: Boolean) {
         _uiState.update { it.copy(showExitConfirmation = show) }
@@ -161,13 +195,19 @@ class TemplateBuilderViewModel @Inject constructor(
 
     fun updateNodeName(nodeId: String, newName: String) {
         _uiState.update { state ->
-            state.copy(nodes = state.nodes.map { if (it.id == nodeId) it.copy(name = newName) else it }, hasUnsavedChanges = true)
+            state.copy(
+                nodes = state.nodes.map { if (it.id == nodeId) it.copy(name = newName) else it },
+                hasUnsavedChanges = true
+            )
         }
     }
 
     fun updateNodeType(nodeId: String, newTypeId: String) {
         _uiState.update { state ->
-            state.copy(nodes = state.nodes.map { if (it.id == nodeId) it.copy(typeId = newTypeId) else it }, hasUnsavedChanges = true)
+            state.copy(
+                nodes = state.nodes.map { if (it.id == nodeId) it.copy(typeId = newTypeId) else it },
+                hasUnsavedChanges = true
+            )
         }
     }
 
@@ -177,9 +217,17 @@ class TemplateBuilderViewModel @Inject constructor(
             val newValues = if (currentValues.any { it.schemaId == schemaId }) {
                 currentValues.map { if (it.schemaId == schemaId) it.copy(value = value) else it }
             } else {
-                currentValues + NodeFieldValue(nodeId = nodeId, schemaId = schemaId, fieldName = fieldName, value = value)
+                currentValues + NodeFieldValue(
+                    nodeId = nodeId,
+                    schemaId = schemaId,
+                    fieldName = fieldName,
+                    value = value
+                )
             }
-            state.copy(fieldValues = state.fieldValues + (nodeId to newValues), hasUnsavedChanges = true)
+            state.copy(
+                fieldValues = state.fieldValues + (nodeId to newValues),
+                hasUnsavedChanges = true
+            )
         }
     }
 
@@ -211,13 +259,16 @@ class TemplateBuilderViewModel @Inject constructor(
                 nodeSchedules = state.nodeSchedules + (nodeId to schedules),
                 dirtyScheduleNodeIds = state.dirtyScheduleNodeIds + nodeId,
                 hasUnsavedChanges = true
-            ) 
+            )
         }
     }
 
     fun toggleNodeSequential(nodeId: String, isSequential: Boolean) {
         _uiState.update { state ->
-            state.copy(nodes = state.nodes.map { if (it.id == nodeId) it.copy(isSequential = isSequential) else it }, hasUnsavedChanges = true)
+            state.copy(
+                nodes = state.nodes.map { if (it.id == nodeId) it.copy(isSequential = isSequential) else it },
+                hasUnsavedChanges = true
+            )
         }
     }
 
@@ -252,14 +303,29 @@ class TemplateBuilderViewModel @Inject constructor(
                     parentId = null,
                     instanceId = null,
                     position = 0,
-                    scheduledTime = state.startTime,
-                    durationMinutes = state.durationMinutes,
-                    isSequential = false
+                    scheduledTime = when (state.temporalMode) {
+                        TemporalMode.NONE -> null
+                        TemporalMode.SEQUENTIAL -> null
+                        TemporalMode.START_ONLY -> state.startTime
+                        TemporalMode.START_END -> state.startTime
+                    },
+                    durationMinutes = when (state.temporalMode) {
+                        TemporalMode.NONE -> null
+                        TemporalMode.START_ONLY -> null
+                        TemporalMode.START_END -> state.durationMinutes
+                        TemporalMode.SEQUENTIAL -> state.durationMinutes
+                    },
+                    isSequential = state.temporalMode == TemporalMode.SEQUENTIAL,
+                    temporalMode = state.temporalMode
                 )
-                
+
                 val nodesToSave = state.nodes.map { node ->
                     val finalParentId = node.parentId.takeIf { !it.isNullOrBlank() } ?: rootNodeId
-                    node.copy(parentId = finalParentId, templateId = finalTemplateId, instanceId = null)
+                    node.copy(
+                        parentId = finalParentId,
+                        templateId = finalTemplateId,
+                        instanceId = null
+                    )
                 }
 
                 val allNodesToSave = listOf(activityRootNode) + nodesToSave
@@ -286,19 +352,21 @@ class TemplateBuilderViewModel @Inject constructor(
                 allNodesToSave.forEach { node ->
                     val existing = existingNodeMap[node.id]
                     if (existing != null) {
-                        nodeRepo.update(node.copy(
-                            createdAt = existing.createdAt,
-                            status = existing.status,
-                            version = existing.version,
-                            syncStatus = existing.syncStatus
-                        )) 
+                        nodeRepo.update(
+                            node.copy(
+                                createdAt = existing.createdAt,
+                                status = existing.status,
+                                version = existing.version,
+                                syncStatus = existing.syncStatus
+                            )
+                        )
                     } else {
                         nodeRepo.upsert(node)
                     }
                 }
 
                 scheduleRepo.deleteByTemplate(finalTemplateId)
-                
+
                 state.selectedDays.forEach { day ->
                     scheduleRepo.upsert(
                         Schedule(
@@ -324,9 +392,20 @@ class TemplateBuilderViewModel @Inject constructor(
                 }
 
                 instanceRepo.dedupeInstancesForDate(DateUtils.getStartOfDay())
-                instanceRepo.regenerateTemplateInstanceForDate(finalTemplateId, DateUtils.getStartOfDay())
+                instanceRepo.regenerateTemplateInstanceForDate(
+                    finalTemplateId,
+                    DateUtils.getStartOfDay()
+                )
 
-                _uiState.update { it.copy(isSaving = false, templateId = finalTemplateId, dirtyScheduleNodeIds = emptySet(), hasUnsavedChanges = false, showExitConfirmation = false) }
+                _uiState.update {
+                    it.copy(
+                        isSaving = false,
+                        templateId = finalTemplateId,
+                        dirtyScheduleNodeIds = emptySet(),
+                        hasUnsavedChanges = false,
+                        showExitConfirmation = false
+                    )
+                }
                 _events.emit("Rutina guardada")
                 onSuccess?.invoke()
             } catch (e: Exception) {

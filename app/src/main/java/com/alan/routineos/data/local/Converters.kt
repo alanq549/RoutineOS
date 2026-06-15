@@ -1,7 +1,12 @@
 package com.alan.routineos.data.local
 
 import androidx.room.TypeConverter
-import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.data.local.entities.FieldType
+import com.alan.routineos.data.local.entities.InstanceStatus
+import com.alan.routineos.data.local.entities.NodeStatus
+import com.alan.routineos.data.local.entities.OverrideType
+import com.alan.routineos.data.local.entities.SyncStatus
+import com.alan.routineos.data.local.entities.TemporalMode
 
 class Converters {
     @TypeConverter
@@ -33,4 +38,10 @@ class Converters {
 
     @TypeConverter
     fun toOverrideType(value: String) = OverrideType.valueOf(value)
+
+    @TypeConverter
+    fun fromTemporalMode(value: TemporalMode) = value.name
+
+    @TypeConverter
+    fun toTemporalMode(value: String) = TemporalMode.valueOf(value)
 }

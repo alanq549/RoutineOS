@@ -1,19 +1,48 @@
 package com.alan.routineos.ui.features.template_builder.presentation
 
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.core.util.ScheduleResolver
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.TemporalMode
 import com.alan.routineos.ui.features.template_builder.components.NodeScheduleSheet
 import com.alan.routineos.ui.features.template_builder.sections.ActivityIdentitySection
 import com.alan.routineos.ui.features.template_builder.sections.AdvancedSection
@@ -31,7 +61,15 @@ import com.alan.routineos.ui.features.template_builder.sections.RepeatSection
 import com.alan.routineos.ui.features.template_builder.sections.TimeRangeSection
 import com.alan.routineos.ui.features.template_builder.sections.nodeStructureSection
 import com.alan.routineos.ui.features.template_builder.viewmodel.TemplateBuilderViewModel
-import com.alan.routineos.ui.theme.*
+import com.alan.routineos.ui.theme.ColorBg
+import com.alan.routineos.ui.theme.ColorBorder
+import com.alan.routineos.ui.theme.ColorExec
+import com.alan.routineos.ui.theme.ColorSurface
+import com.alan.routineos.ui.theme.ColorText
+import com.alan.routineos.ui.theme.ColorTextDim
+import com.alan.routineos.ui.theme.ColorTextMuted
+import com.alan.routineos.ui.theme.MetaMono
+import com.alan.routineos.ui.theme.TitleNode
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,7 +90,15 @@ fun TemplateBuilderScreen(
         Color(0xFF795548), Color(0xFF607D8B)
     )
 
-    val canSave = uiState.name.isNotBlank() && uiState.startTime.isNotBlank() && uiState.startTime != "--:--"
+    val canSave = uiState.name.isNotBlank() && when (uiState.temporalMode) {
+        TemporalMode.NONE -> true
+        TemporalMode.SEQUENTIAL -> uiState.durationMinutes > 0
+        TemporalMode.START_ONLY -> uiState.startTime.isNotBlank() && uiState.startTime != "--:--"
+        TemporalMode.START_END -> uiState.startTime.isNotBlank() &&
+                uiState.startTime != "--:--" &&
+                uiState.endTime.isNotBlank() &&
+                uiState.endTime != "--:--"
+    }
 
     LaunchedEffect(Unit) {
         viewModel.events.collectLatest { message ->
@@ -93,25 +139,35 @@ fun TemplateBuilderScreen(
                     color = ColorTextDim,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
                     onClick = { viewModel.saveTemplate(onSuccess = onBack) },
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("GUARDAR Y SALIR", style = TitleNode.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                    Text(
+                        "GUARDAR Y SALIR",
+                        style = TitleNode.copy(color = Color.White, fontWeight = FontWeight.Bold)
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
                 OutlinedButton(
                     onClick = onBack,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red.copy(alpha = 0.3f)),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        Color.Red.copy(alpha = 0.3f)
+                    ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("DESCARTAR CAMBIOS", style = TitleNode)
@@ -171,10 +227,12 @@ fun TemplateBuilderScreen(
 
             item {
                 TimeRangeSection(
+                    temporalMode = uiState.temporalMode,
                     startTime = uiState.startTime,
                     endTime = uiState.endTime,
                     durationMinutes = uiState.durationMinutes,
                     hasNodeSchedules = uiState.nodeSchedules.any { it.value.isNotEmpty() },
+                    onTemporalModeChange = viewModel::updateTemporalMode,
                     onStartTimeChange = viewModel::updateStartTime,
                     onEndTimeChange = viewModel::updateEndTime,
                     onDurationChange = viewModel::updateDurationMinutes
@@ -200,11 +258,20 @@ fun TemplateBuilderScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.Add, null, tint = ColorExec, modifier = Modifier.size(32.dp))
+                            Icon(
+                                Icons.Default.Add,
+                                null,
+                                tint = ColorExec,
+                                modifier = Modifier.size(32.dp)
+                            )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 "DEFINIR ESTRUCTURA INTERNA",
-                                style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold),
+                                style = MetaMono.copy(
+                                    fontSize = 11.sp,
+                                    letterSpacing = 1.2.sp,
+                                    fontWeight = FontWeight.Bold
+                                ),
                                 color = ColorText
                             )
                             Text(
@@ -251,7 +318,8 @@ fun TemplateBuilderScreen(
             )
 
             val inheritedSchedules = inheritanceInfo?.second ?: emptyList()
-            val schedulesForSheet = if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
+            val schedulesForSheet =
+                if (ownSchedules.isNotEmpty()) ownSchedules else inheritedSchedules
             val isUsingInheritedSchedule = ownSchedules.isEmpty() && inheritedSchedules.isNotEmpty()
 
             NodeScheduleSheet(
@@ -306,7 +374,11 @@ private fun TemplateBuilderTopBar(
 
         Text(
             text = if (isNewTemplate) "NUEVA ACTIVIDAD" else "EDITAR ACTIVIDAD",
-            style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold),
+            style = MetaMono.copy(
+                fontSize = 11.sp,
+                letterSpacing = 1.2.sp,
+                fontWeight = FontWeight.Bold
+            ),
             color = ColorText
         )
 
@@ -322,7 +394,10 @@ private fun TemplateBuilderTopBar(
             shape = RoundedCornerShape(8.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
             modifier = Modifier.height(36.dp),
-            border = if (!hasChanges && canSave) androidx.compose.foundation.BorderStroke(1.dp, ColorExec.copy(alpha = 0.5f)) else null
+            border = if (!hasChanges && canSave) androidx.compose.foundation.BorderStroke(
+                1.dp,
+                ColorExec.copy(alpha = 0.5f)
+            ) else null
         ) {
             Text(
                 text = "GUARDAR",

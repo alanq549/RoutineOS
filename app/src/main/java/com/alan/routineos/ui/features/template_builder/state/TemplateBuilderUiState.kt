@@ -5,13 +5,15 @@ import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeType
+import com.alan.routineos.data.local.entities.TemporalMode
 
 data class TemplateBuilderUiState(
     val templateId: String? = null,
     val name: String = "",
     val colorHex: String = "#3FB950",
-    
+
     // Temporal State
+    val temporalMode: TemporalMode = TemporalMode.START_END,
     val selectedDays: Set<Int> = emptySet(),
     val startTime: String = "08:00",
     val endTime: String = "09:00",
@@ -27,7 +29,7 @@ data class TemplateBuilderUiState(
 
     val isLoading: Boolean = true,
     val isSaving: Boolean = false,
-    
+
     val hasUnsavedChanges: Boolean = false,
     val showExitConfirmation: Boolean = false
 )

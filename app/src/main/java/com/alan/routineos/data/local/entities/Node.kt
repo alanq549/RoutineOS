@@ -16,14 +16,18 @@ data class Node(
     val position: Int = 0,
     val scheduledTime: String? = null,  // "07:00"
     val durationMinutes: Int? = null,
+    val temporalMode: TemporalMode = TemporalMode.START_END,
     val status: NodeStatus = NodeStatus.PENDING,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val deletedAt: Long? = null,
     val syncStatus: SyncStatus = SyncStatus.PENDING_SYNC,
     val version: Int = 1,
-    val isSequential: Boolean = true // true si no depende de horarios específicos
+    val isSequential: Boolean = true, // true si no depende de horarios específicos
+
 )
+
 
 enum class NodeStatus { PENDING, ACTIVE, COMPLETED, SKIPPED, POSTPONED }
 enum class SyncStatus { SYNCED, PENDING_SYNC, CONFLICT }
+enum class TemporalMode { NONE, START_ONLY, START_END, SEQUENTIAL }

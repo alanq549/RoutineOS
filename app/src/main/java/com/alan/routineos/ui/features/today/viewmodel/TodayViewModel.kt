@@ -18,6 +18,7 @@ import com.alan.routineos.data.local.entities.OverrideType
 import com.alan.routineos.data.local.entities.PlanningItemEntity
 import com.alan.routineos.data.local.entities.RoutineTemplate
 import com.alan.routineos.data.local.entities.Schedule
+import com.alan.routineos.data.local.entities.TemporalMode
 import com.alan.routineos.data.repository.FieldValueRepository
 import com.alan.routineos.data.repository.InstanceRepository
 import com.alan.routineos.data.repository.MetadataSchemaRepository
@@ -255,20 +256,43 @@ class TodayViewModel @Inject constructor(
             val templateSchedules = activeSchedules.filter { it.templateId == templateId }
             val globalSchedule = templateSchedules.find { it.weekday == weekday }
 
-            val baseStart = globalSchedule?.startTime ?: rootNode.scheduledTime
-            val baseEnd = globalSchedule?.endTime ?: baseStart?.let {
-                addMinutes(
-                    it,
-                    rootNode.durationMinutes ?: 60
-                )
+            if (rootNode.temporalMode == TemporalMode.NONE) {
+                return@mapNotNull null
             }
 
-            val duration = if (baseStart != null && baseEnd != null) {
-                val diff = ScheduleResolver.timeToMinutes(baseEnd) - ScheduleResolver.timeToMinutes(
-                    baseStart
-                )
-                if (diff <= 0) rootNode.durationMinutes ?: 60 else diff
-            } else rootNode.durationMinutes ?: 60
+            val baseStart = when (rootNode.temporalMode) {
+                TemporalMode.NONE -> null
+                TemporalMode.SEQUENTIAL -> null
+                TemporalMode.START_ONLY -> rootNode.scheduledTime ?: globalSchedule?.startTime
+                TemporalMode.START_END -> globalSchedule?.startTime ?: rootNode.scheduledTime
+            }
+
+            val baseEnd = when (rootNode.temporalMode) {
+                TemporalMode.NONE -> null
+                TemporalMode.START_ONLY -> null
+                TemporalMode.SEQUENTIAL -> null
+                TemporalMode.START_END -> {
+                    globalSchedule?.endTime ?: baseStart?.let {
+                        addMinutes(it, rootNode.durationMinutes ?: 60)
+                    }
+                }
+            }
+
+            val duration = when (rootNode.temporalMode) {
+                TemporalMode.NONE -> 0
+                TemporalMode.START_ONLY -> 0
+                TemporalMode.SEQUENTIAL -> rootNode.durationMinutes ?: 30
+                TemporalMode.START_END -> {
+                    if (baseStart != null && baseEnd != null) {
+                        val diff = ScheduleResolver.timeToMinutes(baseEnd) -
+                                ScheduleResolver.timeToMinutes(baseStart)
+
+                        if (diff <= 0) rootNode.durationMinutes ?: 60 else diff
+                    } else {
+                        rootNode.durationMinutes ?: 60
+                    }
+                }
+            }
 
             ResolvedTimeBlock(
                 node = rootNode,
@@ -289,7 +313,9 @@ class TodayViewModel @Inject constructor(
             val nodeOverrides = overridesMap[block.node.id].orEmpty()
 
             // Subfix 12.5: Temporal Dependencies (Roots)
-            if (block.node.isSequential && lastBlockEndTime != null) {
+            if (block.node.temporalMode == TemporalMode.SEQUENTIAL && lastBlockEndTime != null) {
+                block.effectiveStart = lastBlockEndTime
+            } else if (block.node.isSequential && lastBlockEndTime != null) {
                 block.effectiveStart = lastBlockEndTime
             } else if (accumulatedShift != 0 && block.originalStart != null) {
                 block.effectiveStart = addMinutes(block.originalStart, accumulatedShift)
@@ -302,42 +328,70 @@ class TodayViewModel @Inject constructor(
             nodeOverrides.forEach { ov ->
                 when (ov.overrideType) {
                     OverrideType.SKIP -> block.isSkipped = true
+
                     OverrideType.POSTPONE -> {
-                        val mins = ov.postponeMinutes ?: 0
-                        block.effectiveStart = addMinutes(block.effectiveStart, mins)
-                        nodeSpecificDelta += mins
+                        if (
+                            block.node.temporalMode == TemporalMode.START_ONLY ||
+                            block.node.temporalMode == TemporalMode.START_END
+                        ) {
+                            val mins = ov.postponeMinutes ?: 0
+                            block.effectiveStart = addMinutes(block.effectiveStart, mins)
+
+                            if (block.node.temporalMode == TemporalMode.START_END) {
+                                nodeSpecificDelta += mins
+                            }
+                        }
                     }
 
                     OverrideType.RESCHEDULE -> {
                         val newTime = ov.newTime
-                        if (newTime != null && block.originalStart != null) {
+                        if (
+                            newTime != null &&
+                            block.originalStart != null &&
+                            (
+                                    block.node.temporalMode == TemporalMode.START_ONLY ||
+                                            block.node.temporalMode == TemporalMode.START_END
+                                    )
+                        ) {
                             block.effectiveStart = newTime
-                            val totalShiftFromOriginal =
-                                ScheduleResolver.timeToMinutes(newTime) - ScheduleResolver.timeToMinutes(
-                                    block.originalStart
-                                )
-                            nodeSpecificDelta = totalShiftFromOriginal - block.appliedShiftMinutes
+
+                            if (block.node.temporalMode == TemporalMode.START_END) {
+                                val totalShiftFromOriginal =
+                                    ScheduleResolver.timeToMinutes(newTime) -
+                                            ScheduleResolver.timeToMinutes(block.originalStart)
+
+                                nodeSpecificDelta =
+                                    totalShiftFromOriginal - block.appliedShiftMinutes
+                            }
                         }
                     }
 
                     OverrideType.DURATION_CHANGE -> {
-                        val newDur = ov.newDurationMinutes ?: block.durationMinutes
-                        nodeSpecificDelta += (newDur - block.durationMinutes)
-                        block.durationMinutes = newDur
+                        if (
+                            block.node.temporalMode == TemporalMode.START_END ||
+                            block.node.temporalMode == TemporalMode.SEQUENTIAL
+                        ) {
+                            val newDur = ov.newDurationMinutes ?: block.durationMinutes
+                            nodeSpecificDelta += (newDur - block.durationMinutes)
+                            block.durationMinutes = newDur
+                        }
                     }
 
                     else -> {}
                 }
             }
-
-            block.effectiveEnd = addMinutes(block.effectiveStart, block.durationMinutes)
+            block.effectiveEnd = when (block.node.temporalMode) {
+                TemporalMode.START_ONLY -> null
+                TemporalMode.NONE -> null
+                else -> addMinutes(block.effectiveStart, block.durationMinutes)
+            }
 
             if (nodeSpecificDelta != 0) {
                 accumulatedShift += nodeSpecificDelta
                 shiftSource = block.node.name
             }
 
-            lastBlockEndTime = block.effectiveEnd
+            lastBlockEndTime = block.effectiveEnd ?: block.effectiveStart
             block
         }
 
@@ -363,34 +417,85 @@ class TodayViewModel @Inject constructor(
                 allTemplateSchedules = templateSchedules
             )
 
-            val label = when {
-                block.effectiveStart != null && block.effectiveEnd != null && block.effectiveStart != block.effectiveEnd ->
-                    "${block.effectiveStart} - ${block.effectiveEnd}"
+            val label = when (rootNode.temporalMode) {
+                TemporalMode.START_ONLY -> block.effectiveStart ?: "Flexible"
+                TemporalMode.SEQUENTIAL -> {
+                    if (block.effectiveStart != null && block.effectiveEnd != null) {
+                        "${block.effectiveStart} - ${block.effectiveEnd}"
+                    } else {
+                        "Secuencial"
+                    }
+                }
 
-                block.effectiveStart != null -> block.effectiveStart!!
-                else -> "Flexible"
+                TemporalMode.START_END -> {
+                    if (block.effectiveStart != null && block.effectiveEnd != null && block.effectiveStart != block.effectiveEnd) {
+                        "${block.effectiveStart} - ${block.effectiveEnd}"
+                    } else {
+                        block.effectiveStart ?: "Flexible"
+                    }
+                }
+
+                TemporalMode.NONE -> "Flexible"
             }
 
-            val isCurrent = if (block.effectiveStart != null && block.effectiveEnd != null) {
-                val startMins = ScheduleResolver.timeToMinutes(block.effectiveStart!!)
-                val endMins = ScheduleResolver.timeToMinutes(block.effectiveEnd!!)
-                currentMins in startMins until endMins
-            } else false
+            val isCurrent = if (
+                rootNode.temporalMode == TemporalMode.START_END ||
+                rootNode.temporalMode == TemporalMode.SEQUENTIAL
+            ) {
+                if (block.effectiveStart != null && block.effectiveEnd != null) {
+                    val startMins = ScheduleResolver.timeToMinutes(block.effectiveStart!!)
+                    val endMins = ScheduleResolver.timeToMinutes(block.effectiveEnd!!)
+                    currentMins in startMins until endMins
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
 
             // Subfix 12.3: Conflict Detection
-            val hasConflict = block.appliedShiftMinutes != 0 && !block.node.isSequential
+            val hasConflict = block.appliedShiftMinutes != 0 &&
+                    block.node.temporalMode == TemporalMode.START_END
 
             val suggestions = if (hasConflict) {
-                listOf(
-                    ConflictResolutionUi(
-                        "Aceptar nuevo horario",
-                        ConflictResolutionType.RESCHEDULE,
-                        block.effectiveStart
-                    ),
-                    ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
-                    ConflictResolutionUi("Reducir duración", ConflictResolutionType.REDUCE, "30")
-                )
-            } else emptyList()
+                when (rootNode.temporalMode) {
+                    TemporalMode.START_END -> listOf(
+                        ConflictResolutionUi(
+                            "Aceptar nuevo horario",
+                            ConflictResolutionType.RESCHEDULE,
+                            block.effectiveStart
+                        ),
+                        ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
+                        ConflictResolutionUi(
+                            "Reducir duración",
+                            ConflictResolutionType.REDUCE,
+                            "30"
+                        )
+                    )
+
+                    TemporalMode.START_ONLY -> listOf(
+                        ConflictResolutionUi(
+                            "Aceptar nueva hora",
+                            ConflictResolutionType.RESCHEDULE,
+                            block.effectiveStart
+                        ),
+                        ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP)
+                    )
+
+                    TemporalMode.SEQUENTIAL -> listOf(
+                        ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
+                        ConflictResolutionUi(
+                            "Reducir duración",
+                            ConflictResolutionType.REDUCE,
+                            "30"
+                        )
+                    )
+
+                    TemporalMode.NONE -> emptyList()
+                }
+            } else {
+                emptyList()
+            }
 
             val color = try {
                 Color(template.colorHex.toColorInt())
@@ -466,42 +571,101 @@ class TodayViewModel @Inject constructor(
 
             if (appliesToday) {
                 var status = node.status
-                var startTime = todaySchedule?.startTime ?: node.scheduledTime
-                var endTime = todaySchedule?.endTime
-                val durationMins = node.durationMinutes ?: 30
 
-                // Subfix 12.5: Temporal Dependencies (Siblings)
-                if (node.isSequential && lastEndTime != null) {
+                var startTime = when (node.temporalMode) {
+                    TemporalMode.NONE -> null
+                    TemporalMode.SEQUENTIAL -> null
+                    TemporalMode.START_ONLY -> node.scheduledTime ?: todaySchedule?.startTime
+                    TemporalMode.START_END -> todaySchedule?.startTime ?: node.scheduledTime
+                }
+
+                var endTime = when (node.temporalMode) {
+                    TemporalMode.NONE -> null
+                    TemporalMode.START_ONLY -> null
+                    TemporalMode.SEQUENTIAL -> null
+                    TemporalMode.START_END -> todaySchedule?.endTime
+                }
+
+                val durationMins = when (node.temporalMode) {
+                    TemporalMode.NONE -> 0
+                    TemporalMode.START_ONLY -> 0
+                    TemporalMode.SEQUENTIAL -> node.durationMinutes ?: 30
+                    TemporalMode.START_END -> node.durationMinutes ?: 30
+                }
+
+// Subfix 12.5: Temporal Dependencies (Siblings)
+                if (node.temporalMode == TemporalMode.SEQUENTIAL && lastEndTime != null) {
+                    startTime = lastEndTime
+                    endTime = addMinutes(startTime, durationMins)
+                } else if (node.isSequential && lastEndTime != null) {
                     startTime = lastEndTime
                     endTime = addMinutes(startTime, durationMins)
                 }
+
 
                 nodeOverrides.forEach { override ->
                     when (override.overrideType) {
                         OverrideType.SKIP -> status = NodeStatus.SKIPPED
                         OverrideType.POSTPONE -> {
-                            val mins = override.postponeMinutes ?: 0
-                            startTime = addMinutes(startTime, mins)
-                            endTime = addMinutes(endTime, mins)
+                            if (
+                                node.temporalMode == TemporalMode.START_ONLY ||
+                                node.temporalMode == TemporalMode.START_END
+                            ) {
+                                val mins = override.postponeMinutes ?: 0
+                                startTime = addMinutes(startTime, mins)
+
+                                if (node.temporalMode == TemporalMode.START_END) {
+                                    endTime = addMinutes(endTime, mins)
+                                }
+                            }
                         }
 
-                        OverrideType.RESCHEDULE -> startTime = override.newTime ?: startTime
+                        OverrideType.RESCHEDULE -> {
+                            if (
+                                node.temporalMode == TemporalMode.START_ONLY ||
+                                node.temporalMode == TemporalMode.START_END
+                            ) {
+                                startTime = override.newTime ?: startTime
+                            }
+                        }
+
                         OverrideType.DURATION_CHANGE -> {
-                            val newDuration = override.newDurationMinutes ?: 0
-                            endTime = addMinutes(startTime, newDuration)
+                            if (
+                                node.temporalMode == TemporalMode.START_END ||
+                                node.temporalMode == TemporalMode.SEQUENTIAL
+                            ) {
+                                val newDuration = override.newDurationMinutes ?: durationMins
+                                endTime = addMinutes(startTime, newDuration)
+                            }
                         }
 
                         else -> {}
                     }
                 }
 
-                if (endTime == null && startTime != null) {
+                if (
+                    node.temporalMode == TemporalMode.START_END &&
+                    endTime == null &&
+                    startTime != null
+                ) {
                     endTime = addMinutes(startTime, durationMins)
                 }
 
-                val timeLabel = if (startTime != null) {
-                    if (endTime != null && endTime != startTime) "$startTime - $endTime" else startTime
-                } else null
+                val timeLabel = when (node.temporalMode) {
+                    TemporalMode.NONE -> null
+                    TemporalMode.START_ONLY -> startTime
+                    TemporalMode.SEQUENTIAL -> {
+                        if (startTime != null && endTime != null) "$startTime - $endTime" else null
+                    }
+
+                    TemporalMode.START_END -> {
+                        if (startTime != null) {
+                            if (endTime != null && endTime != startTime) "$startTime - $endTime" else startTime
+                        } else {
+                            null
+                        }
+                    }
+                }
 
                 val nodeValues = fieldValues.filter { it.nodeId == node.id }
                 val resolvedNode = ResolvedNodeUi(
@@ -541,7 +705,7 @@ class TodayViewModel @Inject constructor(
                     )
                 )
 
-                lastEndTime = endTime
+                lastEndTime = endTime ?: startTime
             }
         }
         return result
@@ -625,6 +789,12 @@ class TodayViewModel @Inject constructor(
     fun postponeNode(nodeId: String, minutes: Int) {
         viewModelScope.launch {
             val node = nodeRepo.getById(nodeId) ?: return@launch
+
+            if (node.temporalMode == TemporalMode.NONE || node.temporalMode == TemporalMode.SEQUENTIAL) {
+                _events.emit("Esta actividad no tiene hora fija para posponer")
+                return@launch
+            }
+
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.POSTPONE, postponeMinutes = minutes)
             _events.emit("Actividad pospuesta $minutes min")
@@ -644,6 +814,12 @@ class TodayViewModel @Inject constructor(
     fun rescheduleNode(nodeId: String, newTime: String) {
         viewModelScope.launch {
             val node = nodeRepo.getById(nodeId) ?: return@launch
+
+            if (node.temporalMode == TemporalMode.NONE || node.temporalMode == TemporalMode.SEQUENTIAL) {
+                _events.emit("Esta actividad no tiene hora fija para reprogramar")
+                return@launch
+            }
+
             val instanceId = node.instanceId ?: return@launch
             applyOverride(nodeId, instanceId, OverrideType.RESCHEDULE, newTime = newTime)
             _events.emit("Actividad reprogramada")
@@ -653,6 +829,12 @@ class TodayViewModel @Inject constructor(
     fun changeDuration(nodeId: String, newDurationMinutes: Int) {
         viewModelScope.launch {
             val node = nodeRepo.getById(nodeId) ?: return@launch
+
+            if (node.temporalMode == TemporalMode.NONE || node.temporalMode == TemporalMode.START_ONLY) {
+                _events.emit("Esta actividad no usa duración")
+                return@launch
+            }
+
             val instanceId = node.instanceId ?: return@launch
             applyOverride(
                 nodeId,

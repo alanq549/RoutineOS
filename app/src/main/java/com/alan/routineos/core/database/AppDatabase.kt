@@ -4,8 +4,31 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.alan.routineos.data.local.Converters
-import com.alan.routineos.data.local.dao.*
-import com.alan.routineos.data.local.entities.*
+import com.alan.routineos.data.local.dao.DayInstanceDao
+import com.alan.routineos.data.local.dao.FieldValueDao
+import com.alan.routineos.data.local.dao.MetadataSchemaDao
+import com.alan.routineos.data.local.dao.NodeDao
+import com.alan.routineos.data.local.dao.NodeOverrideDao
+import com.alan.routineos.data.local.dao.NodeScheduleDao
+import com.alan.routineos.data.local.dao.NodeTypeDao
+import com.alan.routineos.data.local.dao.PlanningItemDao
+import com.alan.routineos.data.local.dao.ScheduleDao
+import com.alan.routineos.data.local.dao.ScheduleExceptionDao
+import com.alan.routineos.data.local.dao.SyncDao
+import com.alan.routineos.data.local.dao.TemplateDao
+import com.alan.routineos.data.local.dao.UserDao
+import com.alan.routineos.data.local.entities.DayInstance
+import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.NodeFieldValue
+import com.alan.routineos.data.local.entities.NodeMetadataSchema
+import com.alan.routineos.data.local.entities.NodeOverride
+import com.alan.routineos.data.local.entities.NodeSchedule
+import com.alan.routineos.data.local.entities.NodeType
+import com.alan.routineos.data.local.entities.PlanningItemEntity
+import com.alan.routineos.data.local.entities.RoutineTemplate
+import com.alan.routineos.data.local.entities.Schedule
+import com.alan.routineos.data.local.entities.ScheduleException
+import com.alan.routineos.data.local.entities.UserEntity
 
 @Database(
     entities = [
@@ -22,7 +45,7 @@ import com.alan.routineos.data.local.entities.*
         NodeSchedule::class,
         PlanningItemEntity::class
     ],
-    version = 8,
+    version = 1, // solo yo tengo la app y borro y reinstalo la app sin problemas así que no importa ( cambiara en produccion )
     exportSchema = true
 )
 @TypeConverters(Converters::class)
