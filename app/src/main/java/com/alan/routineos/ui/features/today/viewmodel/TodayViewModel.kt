@@ -1,13 +1,14 @@
 package com.alan.routineos.ui.features.today.viewmodel
 
-import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.alan.routineos.core.util.DateUtils
 import com.alan.routineos.core.util.ScheduleResolver
+import com.alan.routineos.data.local.entities.DayInstance
 import com.alan.routineos.data.local.entities.FieldType
+import com.alan.routineos.data.local.entities.InstanceStatus
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
@@ -15,7 +16,6 @@ import com.alan.routineos.data.local.entities.NodeOverride
 import com.alan.routineos.data.local.entities.NodeSchedule
 import com.alan.routineos.data.local.entities.NodeStatus
 import com.alan.routineos.data.local.entities.OverrideType
-import com.alan.routineos.data.local.entities.PlanningItemEntity
 import com.alan.routineos.data.local.entities.RoutineTemplate
 import com.alan.routineos.data.local.entities.Schedule
 import com.alan.routineos.data.local.entities.TemporalMode
@@ -53,8 +53,10 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.Calendar
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -88,7 +90,7 @@ class TodayViewModel @Inject constructor(
             val today = DateUtils.getStartOfDay()
             val weekday = DateUtils.getDayOfWeek()
 
-            Log.d("TODAY_DEBUG", "INITIALIZING TODAY - Date: $today, Weekday: $weekday")
+            Timber.d("INITIALIZING TODAY - Date: %d, Weekday: %d", today, weekday)
             instanceRepo.dedupeInstancesForDate(today)
             generateInstanceIfNeeded(today, weekday)
 
@@ -125,16 +127,10 @@ class TodayViewModel @Inject constructor(
                 Triple(instances, exceptions, currentTime)
             }.flatMapLatest { (instances, exceptions, currentTime) ->
                 if (instances.isEmpty()) {
-                    Log.d(
-                        "TODAY_DEBUG",
-                        "OBSERVE: No instances found for today. Exceptions: ${exceptions.size}"
-                    )
-                    flowOf(emptyList<TimelineEntryUi>() to exceptions)
+                    Timber.d("OBSERVE: No instances found for today.")
+                    flowOf(Triple(emptyList<TimelineEntryUi>(), exceptions, emptyList<PlanningLinkedItemUi>()))
                 } else {
-                    Log.d(
-                        "TODAY_DEBUG",
-                        "OBSERVE: Found ${instances.size} instances. Resolving data..."
-                    )
+                    Timber.d("OBSERVE: Found %d instances. Resolving data...", instances.size)
                     val templatesFlow = templateRepo.getAll()
                     val schedulesFlow = scheduleRepo.getAll()
                     val nodeSchedulesFlow = nodeRepo.getAllNodeSchedules()
@@ -151,7 +147,7 @@ class TodayViewModel @Inject constructor(
                     }
 
                     val allNodesFlow = if (nodeFlows.isEmpty()) {
-                        flowOf(emptyList<Pair<Node, String>>())
+                        flowOf(emptyList())
                     } else {
                         combine(nodeFlows) { arrays ->
                             arrays.toList().flatten()
@@ -190,7 +186,7 @@ class TodayViewModel @Inject constructor(
                         val overrides = args[6] as List<NodeOverride>
 
                         @Suppress("UNCHECKED_CAST")
-                        val planningItems = args[7] as List<PlanningItemEntity>
+                        val planningItems = args[7] as List<com.alan.routineos.data.local.entities.PlanningItemEntity>
 
                         val timeline = buildTimeline(
                             nodesWithId,
@@ -204,16 +200,38 @@ class TodayViewModel @Inject constructor(
                             weekday,
                             currentTime
                         )
-                        timeline to exceptions
+                        
+                        val unlinkedPlanning = planningItems.filter { 
+                            it.relatedNodeId == null && 
+                            (it.dueDate == null || DateUtils.getStartOfDay(it.dueDate) == today) &&
+                            it.status != PlanningStatus.COMPLETED.name
+                        }.map { entity ->
+                            val pType = PlanningItemType.valueOf(entity.type)
+                            val urgency = if (entity.dueDate != null) {
+                                if (DateUtils.getStartOfDay(entity.dueDate) < today) 0 else 1
+                            } else 2
+                            PlanningLinkedItemUi(
+                                id = entity.id,
+                                type = pType,
+                                title = entity.title,
+                                dueDate = entity.dueDate,
+                                dueTime = entity.dueTime,
+                                status = PlanningStatus.valueOf(entity.status),
+                                urgency = urgency
+                            )
+                        }
+                        
+                        Triple(timeline, exceptions, unlinkedPlanning)
                     }
                 }
             }
-                .collect { (entries, exceptions) ->
+                .collect { (entries, exceptions, unlinked) ->
                     _uiState.update { state ->
                         state.copy(
                             timelineEntries = entries,
                             activeExceptions = exceptions,
-                            totalCount = entries.sumOf { it.resolvedNodes.size + 1 },
+                            unlinkedPlanningItems = unlinked,
+                            totalCount = entries.sumOf { it.resolvedNodes.size + 1 } + unlinked.size,
                             completedCount = entries.sumOf { entry ->
                                 val rootDone =
                                     if (entry.statusLabel == NodeStatus.COMPLETED.name.lowercase()) 1 else 0
@@ -235,7 +253,7 @@ class TodayViewModel @Inject constructor(
         fieldValues: List<NodeFieldValue>,
         schemas: List<NodeMetadataSchema>,
         overrides: List<NodeOverride>,
-        planningItems: List<PlanningItemEntity>,
+        planningItems: List<com.alan.routineos.data.local.entities.PlanningItemEntity>,
         weekday: Int,
         currentTime: String
     ): List<TimelineEntryUi> {
@@ -252,25 +270,28 @@ class TodayViewModel @Inject constructor(
             .groupBy { it.relatedNodeId }
 
         val blocks = rootNodesWithTemplate.mapNotNull { (rootNode, templateId) ->
-            val template = templates.find { it.id == templateId } ?: return@mapNotNull null
-            val templateSchedules = activeSchedules.filter { it.templateId == templateId }
-            val globalSchedule = templateSchedules.find { it.weekday == weekday }
-
-            if (rootNode.temporalMode == TemporalMode.NONE) {
+            val template = templates.find { it.id == templateId } ?: if (templateId == "adhoc_events") {
+                RoutineTemplate(
+                    id = "adhoc_events",
+                    rootNodeId = "",
+                    name = "Agenda",
+                    colorHex = "#607D8B"
+                )
+            } else {
                 return@mapNotNull null
             }
 
+            val templateSchedules = activeSchedules.filter { it.templateId == templateId }
+            val globalSchedule = templateSchedules.find { it.weekday == weekday }
+
             val baseStart = when (rootNode.temporalMode) {
-                TemporalMode.NONE -> null
-                TemporalMode.SEQUENTIAL -> null
+                TemporalMode.NONE, TemporalMode.SEQUENTIAL -> null
                 TemporalMode.START_ONLY -> rootNode.scheduledTime ?: globalSchedule?.startTime
                 TemporalMode.START_END -> globalSchedule?.startTime ?: rootNode.scheduledTime
             }
 
             val baseEnd = when (rootNode.temporalMode) {
-                TemporalMode.NONE -> null
-                TemporalMode.START_ONLY -> null
-                TemporalMode.SEQUENTIAL -> null
+                TemporalMode.NONE, TemporalMode.START_ONLY, TemporalMode.SEQUENTIAL -> null
                 TemporalMode.START_END -> {
                     globalSchedule?.endTime ?: baseStart?.let {
                         addMinutes(it, rootNode.durationMinutes ?: 60)
@@ -279,8 +300,7 @@ class TodayViewModel @Inject constructor(
             }
 
             val duration = when (rootNode.temporalMode) {
-                TemporalMode.NONE -> 0
-                TemporalMode.START_ONLY -> 0
+                TemporalMode.NONE, TemporalMode.START_ONLY -> 0
                 TemporalMode.SEQUENTIAL -> rootNode.durationMinutes ?: 30
                 TemporalMode.START_END -> {
                     if (baseStart != null && baseEnd != null) {
@@ -312,10 +332,8 @@ class TodayViewModel @Inject constructor(
         val resolvedBlocks = blocks.map { block ->
             val nodeOverrides = overridesMap[block.node.id].orEmpty()
 
-            // Subfix 12.5: Temporal Dependencies (Roots)
-            if (block.node.temporalMode == TemporalMode.SEQUENTIAL && lastBlockEndTime != null) {
-                block.effectiveStart = lastBlockEndTime
-            } else if (block.node.isSequential && lastBlockEndTime != null) {
+            // Temporal Dependencies (Roots)
+            if ((block.node.temporalMode == TemporalMode.SEQUENTIAL || block.node.isSequential) && lastBlockEndTime != null) {
                 block.effectiveStart = lastBlockEndTime
             } else if (accumulatedShift != 0 && block.originalStart != null) {
                 block.effectiveStart = addMinutes(block.originalStart, accumulatedShift)
@@ -349,19 +367,18 @@ class TodayViewModel @Inject constructor(
                             newTime != null &&
                             block.originalStart != null &&
                             (
-                                    block.node.temporalMode == TemporalMode.START_ONLY ||
-                                            block.node.temporalMode == TemporalMode.START_END
-                                    )
+                                block.node.temporalMode == TemporalMode.START_ONLY ||
+                                    block.node.temporalMode == TemporalMode.START_END
+                            )
                         ) {
                             block.effectiveStart = newTime
 
                             if (block.node.temporalMode == TemporalMode.START_END) {
                                 val totalShiftFromOriginal =
                                     ScheduleResolver.timeToMinutes(newTime) -
-                                            ScheduleResolver.timeToMinutes(block.originalStart)
+                                        ScheduleResolver.timeToMinutes(block.originalStart)
 
-                                nodeSpecificDelta =
-                                    totalShiftFromOriginal - block.appliedShiftMinutes
+                                nodeSpecificDelta = totalShiftFromOriginal - block.appliedShiftMinutes
                             }
                         }
                     }
@@ -381,8 +398,7 @@ class TodayViewModel @Inject constructor(
                 }
             }
             block.effectiveEnd = when (block.node.temporalMode) {
-                TemporalMode.START_ONLY -> null
-                TemporalMode.NONE -> null
+                TemporalMode.START_ONLY, TemporalMode.NONE -> null
                 else -> addMinutes(block.effectiveStart, block.durationMinutes)
             }
 
@@ -397,7 +413,7 @@ class TodayViewModel @Inject constructor(
 
         val currentMins = ScheduleResolver.timeToMinutes(currentTime)
 
-        return resolvedBlocks.map { block ->
+        return resolvedBlocks.mapNotNull { block ->
             val rootNode = block.node
             val templateId = block.template.id
             val template = block.template
@@ -416,6 +432,11 @@ class TodayViewModel @Inject constructor(
                 template = template,
                 allTemplateSchedules = templateSchedules
             )
+
+            // FIX 15 - Rule 4: Visibility of NONE nodes
+            if (rootNode.temporalMode == TemporalMode.NONE && resolvedNodes.none { it.timeLabel != null }) {
+                return@mapNotNull null
+            }
 
             val label = when (rootNode.temporalMode) {
                 TemporalMode.START_ONLY -> block.effectiveStart ?: "Flexible"
@@ -453,9 +474,8 @@ class TodayViewModel @Inject constructor(
                 false
             }
 
-            // Subfix 12.3: Conflict Detection
-            val hasConflict = block.appliedShiftMinutes != 0 &&
-                    block.node.temporalMode == TemporalMode.START_END
+            // Conflict Detection
+            val hasConflict = block.appliedShiftMinutes != 0 && block.node.temporalMode == TemporalMode.START_END
 
             val suggestions = if (hasConflict) {
                 when (rootNode.temporalMode) {
@@ -466,11 +486,7 @@ class TodayViewModel @Inject constructor(
                             block.effectiveStart
                         ),
                         ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
-                        ConflictResolutionUi(
-                            "Reducir duración",
-                            ConflictResolutionType.REDUCE,
-                            "30"
-                        )
+                        ConflictResolutionUi("Reducir duración", ConflictResolutionType.REDUCE, "30")
                     )
 
                     TemporalMode.START_ONLY -> listOf(
@@ -484,11 +500,7 @@ class TodayViewModel @Inject constructor(
 
                     TemporalMode.SEQUENTIAL -> listOf(
                         ConflictResolutionUi("Omitir esta vez", ConflictResolutionType.SKIP),
-                        ConflictResolutionUi(
-                            "Reducir duración",
-                            ConflictResolutionType.REDUCE,
-                            "30"
-                        )
+                        ConflictResolutionUi("Reducir duración", ConflictResolutionType.REDUCE, "30")
                     )
 
                     TemporalMode.NONE -> emptyList()
@@ -504,10 +516,17 @@ class TodayViewModel @Inject constructor(
             }
             val rootValues = fieldValues.filter { it.nodeId == rootNode.id }
 
+            val entrySortTime = if (rootNode.temporalMode == TemporalMode.NONE) {
+                resolvedNodes.mapNotNull { it.timeLabel?.split(" ")?.firstOrNull() }
+                    .minOrNull() ?: "99:99"
+            } else {
+                block.effectiveStart ?: "99:99"
+            }
+
             TimelineEntryUi(
                 id = rootNode.id,
                 time = label,
-                sortTime = block.effectiveStart ?: "99:99",
+                sortTime = entrySortTime,
                 endTime = block.effectiveEnd,
                 title = rootNode.name,
                 statusLabel = if (block.isSkipped) "skipped" else rootNode.status.name.lowercase(),
@@ -530,7 +549,7 @@ class TodayViewModel @Inject constructor(
                 resolvedNodes = resolvedNodes,
                 wasShiftedByDomino = block.appliedShiftMinutes != 0,
                 dominoReason = if (hasConflict) "Conflicto por retraso previo" else block.shiftReason,
-                planningInfo = calculatePlanningIndicator(planningMap[rootNode.id], rootNode.id)
+                planningInfo = calculatePlanningIndicator(planningMap[rootNode.id])
             )
         }.sortedBy { it.sortTime }
     }
@@ -542,7 +561,7 @@ class TodayViewModel @Inject constructor(
         overridesMap: Map<String, List<NodeOverride>>,
         fieldValues: List<NodeFieldValue>,
         schemas: List<NodeMetadataSchema>,
-        planningMap: Map<String?, List<PlanningItemEntity>>,
+        planningMap: Map<String?, List<com.alan.routineos.data.local.entities.PlanningItemEntity>>,
         depth: Int,
         todayWeekday: Int,
         template: RoutineTemplate,
@@ -573,31 +592,23 @@ class TodayViewModel @Inject constructor(
                 var status = node.status
 
                 var startTime = when (node.temporalMode) {
-                    TemporalMode.NONE -> null
-                    TemporalMode.SEQUENTIAL -> null
+                    TemporalMode.NONE, TemporalMode.SEQUENTIAL -> null
                     TemporalMode.START_ONLY -> node.scheduledTime ?: todaySchedule?.startTime
                     TemporalMode.START_END -> todaySchedule?.startTime ?: node.scheduledTime
                 }
 
                 var endTime = when (node.temporalMode) {
-                    TemporalMode.NONE -> null
-                    TemporalMode.START_ONLY -> null
-                    TemporalMode.SEQUENTIAL -> null
+                    TemporalMode.NONE, TemporalMode.START_ONLY, TemporalMode.SEQUENTIAL -> null
                     TemporalMode.START_END -> todaySchedule?.endTime
                 }
 
                 val durationMins = when (node.temporalMode) {
-                    TemporalMode.NONE -> 0
-                    TemporalMode.START_ONLY -> 0
-                    TemporalMode.SEQUENTIAL -> node.durationMinutes ?: 30
-                    TemporalMode.START_END -> node.durationMinutes ?: 30
+                    TemporalMode.NONE, TemporalMode.START_ONLY -> 0
+                    TemporalMode.SEQUENTIAL, TemporalMode.START_END -> node.durationMinutes ?: 30
                 }
 
-// Subfix 12.5: Temporal Dependencies (Siblings)
-                if (node.temporalMode == TemporalMode.SEQUENTIAL && lastEndTime != null) {
-                    startTime = lastEndTime
-                    endTime = addMinutes(startTime, durationMins)
-                } else if (node.isSequential && lastEndTime != null) {
+                // Temporal Dependencies (Siblings)
+                if ((node.temporalMode == TemporalMode.SEQUENTIAL || node.isSequential) && lastEndTime != null) {
                     startTime = lastEndTime
                     endTime = addMinutes(startTime, durationMins)
                 }
@@ -667,43 +678,49 @@ class TodayViewModel @Inject constructor(
                     }
                 }
 
-                val nodeValues = fieldValues.filter { it.nodeId == node.id }
-                val resolvedNode = ResolvedNodeUi(
-                    id = node.id,
-                    name = node.name,
-                    depth = depth,
-                    timeLabel = timeLabel,
-                    isCompleted = status == NodeStatus.COMPLETED,
-                    isSkipped = status == NodeStatus.SKIPPED,
-                    fields = nodeValues.map { v ->
-                        val s = schemas.find { it.id == v.schemaId }
-                        ResolvedFieldUi(
-                            v.schemaId,
-                            v.fieldName,
-                            s?.fieldLabel ?: v.fieldName,
-                            v.value,
-                            s?.fieldType ?: FieldType.TEXT
-                        )
-                    },
-                    planningInfo = calculatePlanningIndicator(planningMap[node.id], node.id)
+                val childSubNodes = resolveNodesRecursive(
+                    node.id,
+                    allNodes,
+                    nodeSchedulesMap,
+                    overridesMap,
+                    fieldValues,
+                    schemas,
+                    planningMap,
+                    depth + 1,
+                    todayWeekday,
+                    template,
+                    allTemplateSchedules
                 )
 
-                result.add(resolvedNode)
-                result.addAll(
-                    resolveNodesRecursive(
-                        node.id,
-                        allNodes,
-                        nodeSchedulesMap,
-                        overridesMap,
-                        fieldValues,
-                        schemas,
-                        planningMap,
-                        depth + 1,
-                        todayWeekday,
-                        template,
-                        allTemplateSchedules
+                // FIX 15 - Rule 4 for nested nodes
+                val hasTimeLabel = timeLabel != null
+                val descendantsHaveTime = childSubNodes.any { it.timeLabel != null }
+
+                if (node.temporalMode != TemporalMode.NONE || hasTimeLabel || descendantsHaveTime) {
+                    val nodeValues = fieldValues.filter { it.nodeId == node.id }
+                    val resolvedNode = ResolvedNodeUi(
+                        id = node.id,
+                        name = node.name,
+                        depth = depth,
+                        timeLabel = timeLabel,
+                        isCompleted = status == NodeStatus.COMPLETED,
+                        isSkipped = status == NodeStatus.SKIPPED,
+                        fields = nodeValues.map { v ->
+                            val s = schemas.find { it.id == v.schemaId }
+                            ResolvedFieldUi(
+                                v.schemaId,
+                                v.fieldName,
+                                s?.fieldLabel ?: v.fieldName,
+                                v.value,
+                                s?.fieldType ?: FieldType.TEXT
+                            )
+                        },
+                        planningInfo = calculatePlanningIndicator(planningMap[node.id])
                     )
-                )
+
+                    result.add(resolvedNode)
+                    result.addAll(childSubNodes)
+                }
 
                 lastEndTime = endTime ?: startTime
             }
@@ -712,28 +729,21 @@ class TodayViewModel @Inject constructor(
     }
 
     private fun calculatePlanningIndicator(
-        items: List<PlanningItemEntity>?,
-        nodeId: String
+        items: List<com.alan.routineos.data.local.entities.PlanningItemEntity>?
     ): PlanningIndicatorUi? {
-        if (items.isNullOrEmpty()) {
-            return null
-        }
+        if (items.isNullOrEmpty()) return null
 
         val today = DateUtils.getStartOfDay()
         val linkedItems = items.map { entity ->
             val pType = PlanningItemType.valueOf(entity.type)
-            val urgency: Int
-
-            if (entity.dueDate != null) {
-                val dueStart = DateUtils.getStartOfDay(entity.dueDate)
+            val urgency = entity.dueDate?.let { dueDate ->
+                val dueStart = DateUtils.getStartOfDay(dueDate)
                 when {
-                    dueStart < today -> urgency = 0
-                    dueStart == today -> urgency = 1
-                    else -> urgency = 2
+                    dueStart < today -> 0
+                    dueStart == today -> 1
+                    else -> 2
                 }
-            } else {
-                urgency = 2
-            }
+            } ?: 2
 
             PlanningLinkedItemUi(
                 id = entity.id,
@@ -755,18 +765,12 @@ class TodayViewModel @Inject constructor(
                 }
         )
 
-        if (linkedItems.isEmpty()) {
-            return null
-        }
-
-        val overdue = linkedItems.count { it.urgency == 0 }
-        val dueToday = linkedItems.count { it.urgency == 1 }
-        val pending = linkedItems.count { it.urgency == 2 }
+        if (linkedItems.isEmpty()) return null
 
         return PlanningIndicatorUi(
-            pendingCount = pending,
-            todayCount = dueToday,
-            overdueCount = overdue,
+            pendingCount = linkedItems.count { it.urgency == 2 },
+            todayCount = linkedItems.count { it.urgency == 1 },
+            overdueCount = linkedItems.count { it.urgency == 0 },
             totalCount = linkedItems.size,
             items = linkedItems
         )
@@ -774,18 +778,92 @@ class TodayViewModel @Inject constructor(
 
     private fun addMinutes(time: String?, minutes: Int): String? {
         if (time == null) return null
-        try {
+        return try {
             val parts = time.split(":")
             var total = parts[0].toInt() * 60 + parts[1].toInt() + minutes
             total %= 1440
             if (total < 0) total += 1440
-            return String.format(Locale.US, "%02d:%02d", total / 60, total % 60)
+            String.format(Locale.US, "%02d:%02d", total / 60, total % 60)
         } catch (e: Exception) {
-            return time
+            time
         }
     }
 
-    // QUICK ACTIONS
+    // QUICK ACTIONS - FIX 15
+    fun createSpontaneousEvent(title: String, startTime: String, durationMinutes: Int) {
+        viewModelScope.launch {
+            val today = DateUtils.getStartOfDay()
+            val currentInstances = instanceRepo.getByDate(today).first()
+            val existingAdhoc = currentInstances.find { it.templateId == "adhoc_events" }
+
+            val adhocId = if (existingAdhoc == null) {
+                val newAdhocInstance = DayInstance(
+                    id = UUID.randomUUID().toString(),
+                    templateId = "adhoc_events",
+                    date = today,
+                    status = InstanceStatus.GENERATED
+                )
+                instanceRepo.upsert(newAdhocInstance)
+                newAdhocInstance.id
+            } else {
+                existingAdhoc.id
+            }
+
+            val typeId = nodeRepo.getAllTemplateNodes().first().firstOrNull()?.typeId ?: "event"
+
+            val newNode = Node(
+                id = UUID.randomUUID().toString(),
+                instanceId = adhocId,
+                templateId = "adhoc_events",
+                name = title,
+                scheduledTime = startTime,
+                durationMinutes = durationMinutes,
+                temporalMode = TemporalMode.START_END,
+                typeId = typeId,
+                status = NodeStatus.PENDING
+            )
+            nodeRepo.insertAll(listOf(newNode))
+            _events.emit("Evento espontáneo creado")
+        }
+    }
+
+    fun createQuickPlanningItem(
+        title: String,
+        type: PlanningItemType,
+        date: Long? = DateUtils.getStartOfDay(),
+        time: String? = null,
+        nodeId: String? = null
+    ) {
+        viewModelScope.launch {
+            val item = com.alan.routineos.data.local.entities.PlanningItemEntity(
+                id = UUID.randomUUID().toString(),
+                type = type.name,
+                title = title,
+                description = null,
+                dueDate = date,
+                dueTime = time,
+                relatedNodeId = nodeId,
+                relatedNodePath = null,
+                status = PlanningStatus.PENDING.name
+            )
+            planningRepo.upsertPlanningItem(item)
+            _events.emit("${if (type == PlanningItemType.TASK) "Tarea" else "Nota"} rápida creada")
+        }
+    }
+
+    fun adjustNodeDuration(nodeId: String, deltaMinutes: Int) {
+        viewModelScope.launch {
+            val node = nodeRepo.getById(nodeId) ?: return@launch
+            val overrides = nodeOverrideRepo.getAll().first().filter { it.nodeId == nodeId }
+            val durationOverride = overrides.find { it.overrideType == OverrideType.DURATION_CHANGE }
+            
+            val baseDuration = node.durationMinutes ?: 60
+            val currentDuration = durationOverride?.newDurationMinutes ?: baseDuration
+            
+            changeDuration(nodeId, currentDuration + deltaMinutes)
+        }
+    }
+
     fun postponeNode(nodeId: String, minutes: Int) {
         viewModelScope.launch {
             val node = nodeRepo.getById(nodeId) ?: return@launch

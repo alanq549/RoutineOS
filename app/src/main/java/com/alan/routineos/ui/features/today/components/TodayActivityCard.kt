@@ -59,6 +59,7 @@ fun TodayActivityCard(
     onPostpone: (String, Int) -> Unit = { _, _ -> },
     onReschedule: (String) -> Unit = {},
     onDurationChange: (String, Int) -> Unit = { _, _ -> },
+    onAdjustDuration: (String, Int) -> Unit = { _, _ -> },
     onPlanningToggle: (String) -> Unit = {},
     onResolveConflict: (ConflictResolutionUi) -> Unit = {}
 ) {
@@ -259,7 +260,8 @@ fun TodayActivityCard(
                                     onPostpone = { onPostpone(id, it) },
                                     onSkip = { onSkip(id) },
                                     onReschedule = { onReschedule(id) },
-                                    onDurationChange = { onDurationChange(id, it) }
+                                    onDurationChange = { onDurationChange(id, it) },
+                                    onAdjustDuration = { onAdjustDuration(id, it) }
                                 )
                             }
 
@@ -375,7 +377,8 @@ fun TodayActivityCard(
                                                     onPostpone = { onPostpone(node.id, it) },
                                                     onSkip = { onSkip(node.id) },
                                                     onReschedule = { onReschedule(node.id) },
-                                                    onDurationChange = { onDurationChange(node.id, it) }
+                                                    onDurationChange = { onDurationChange(node.id, it) },
+                                                    onAdjustDuration = { onAdjustDuration(node.id, it) }
                                                 )
                                             }
                                         }
@@ -647,7 +650,8 @@ fun QuickActionsMenu(
     onPostpone: (Int) -> Unit,
     onSkip: () -> Unit,
     onReschedule: () -> Unit,
-    onDurationChange: (Int) -> Unit
+    onDurationChange: (Int) -> Unit,
+    onAdjustDuration: (Int) -> Unit
 ) {
     DropdownMenu(
         expanded = expanded,
@@ -663,6 +667,16 @@ fun QuickActionsMenu(
             text = { Text("Posponer 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
             onClick = { onPostpone(30); onDismiss() },
             leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Extender 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onAdjustDuration(15); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp)) }
+        )
+        DropdownMenuItem(
+            text = { Text("Reducir 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onAdjustDuration(-15); onDismiss() },
+            leadingIcon = { Icon(Icons.Default.Remove, null, modifier = Modifier.size(18.dp)) }
         )
         DropdownMenuItem(
             text = { Text("Recortar a 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
