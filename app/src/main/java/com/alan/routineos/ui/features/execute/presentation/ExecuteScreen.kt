@@ -165,9 +165,17 @@ fun ExecuteScreen(
                     Spacer(modifier = Modifier.height(32.dp))
 
                     uiState.schemas.forEach { schema ->
+                        val isInstanceNode = uiState.node?.instanceId != null
+                        val isReadonly = if (isInstanceNode) {
+                            !schema.editableInExecution
+                        } else {
+                            !schema.editableInTemplate
+                        }
+
                         DynamicField(
                             schema = schema,
                             currentValue = uiState.fieldValues[schema.fieldName] ?: "",
+                            readonly = isReadonly,
                             onValueChange = { newValue ->
                                 viewModel.updateDraftValue(schema.fieldName, newValue)
                             }

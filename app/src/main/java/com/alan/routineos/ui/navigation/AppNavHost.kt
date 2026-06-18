@@ -30,6 +30,8 @@ import com.alan.routineos.ui.features.account.navigation.accountScreen
 import com.alan.routineos.ui.features.auth.navigation.AUTH_ROUTE
 import com.alan.routineos.ui.features.auth.navigation.authScreen
 import com.alan.routineos.ui.features.auth.navigation.navigateToAuth
+import com.alan.routineos.ui.features.backup.navigation.backupScreen
+import com.alan.routineos.ui.features.backup.navigation.navigateToBackup
 import com.alan.routineos.ui.features.execute.navigation.executeScreen
 import com.alan.routineos.ui.features.execute.navigation.navigateToExecute
 import com.alan.routineos.ui.features.node_type_manager.navigation.nodeTypeManagerScreen
@@ -169,6 +171,10 @@ fun AppNavHost(
 
             statsScreen()
 
+            backupScreen(
+                onBack = { navController.popBackStack() }
+            )
+
             accountScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = {
@@ -176,6 +182,9 @@ fun AppNavHost(
                 },
                 onNavigateToAuth = {
                     navController.navigateToAuth()
+                },
+                onNavigateToBackup = {
+                    navController.navigateToBackup()
                 }
             )
         }

@@ -28,6 +28,10 @@ class NodeRepository @Inject constructor(
 
     fun getAllTemplateNodes(): Flow<List<Node>> = nodeDao.getAllTemplateNodes()
 
+    fun getAllTemplateNodesIncludingDeleted(): Flow<List<Node>> = nodeDao.getAllTemplateNodesIncludingDeleted()
+
+    fun getAllInstanceNodes(): Flow<List<Node>> = nodeDao.getAllInstanceNodes()
+
     suspend fun upsert(node: Node) = nodeDao.upsert(node)
 
     suspend fun insertAll(nodes: List<Node>) = nodeDao.insertAll(nodes)

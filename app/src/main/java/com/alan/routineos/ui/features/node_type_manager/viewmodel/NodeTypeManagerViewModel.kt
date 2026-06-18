@@ -2,6 +2,7 @@ package com.alan.routineos.ui.features.node_type_manager.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.alan.routineos.data.local.entities.ExecutionTrackingMode
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeType
@@ -71,7 +72,17 @@ class NodeTypeManagerViewModel @Inject constructor(
         }
     }
 
-    fun addSchemaFull(typeId: String, name: String, label: String, fieldType: FieldType, defaultValue: String?, unit: String?) {
+    fun addSchemaFull(
+        typeId: String,
+        name: String,
+        label: String,
+        fieldType: FieldType,
+        defaultValue: String?,
+        unit: String?,
+        editableInTemplate: Boolean,
+        editableInExecution: Boolean,
+        trackingMode: ExecutionTrackingMode
+    ) {
         viewModelScope.launch {
             val newSchema = NodeMetadataSchema(
                 id = UUID.randomUUID().toString(),
@@ -82,6 +93,9 @@ class NodeTypeManagerViewModel @Inject constructor(
                 defaultValue = defaultValue,
                 unit = unit,
                 position = _uiState.value.schemasForSelectedType.size,
+                editableInTemplate = editableInTemplate,
+                editableInExecution = editableInExecution,
+                executionTrackingMode = trackingMode,
                 syncStatus = SyncStatus.PENDING_SYNC
             )
             schemaRepo.upsert(newSchema)

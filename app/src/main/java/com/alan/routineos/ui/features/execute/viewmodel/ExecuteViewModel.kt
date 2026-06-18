@@ -20,7 +20,8 @@ class ExecuteViewModel @Inject constructor(
     private val nodeRepo: NodeRepository,
     private val typeRepo: NodeTypeRepository,
     private val schemaRepo: MetadataSchemaRepository,
-    private val valueRepo: FieldValueRepository
+    private val valueRepo: FieldValueRepository,
+    private val executionRepo: ExecutionFieldValueRepository
 ) : ViewModel() {
 
     private val nodeId: String = checkNotNull(savedStateHandle["nodeId"])
@@ -42,16 +43,29 @@ class ExecuteViewModel @Inject constructor(
             val type = typeRepo.getById(node.typeId) ?: return@launch
             
             val schemasFlow = schemaRepo.getByTypeId(type.id)
-            val valuesFlow = valueRepo.getByNode(node.id)
+            val baseValuesFlow = if (node.instanceId != null && node.sourceTemplateNodeId != null) {
+                valueRepo.getByNode(node.sourceTemplateNodeId)
+            } else {
+                valueRepo.getByNode(node.id)
+            }
+            
+            val executionValuesFlow = if (node.instanceId != null) {
+                executionRepo.getByNodeId(node.id)
+            } else {
+                flowOf(emptyList())
+            }
 
-            combine(schemasFlow, valuesFlow) { schemas, values ->
-                val history = values.groupBy { it.updatedAt / 1000 } 
-                    .map { (time, vals) -> HistorySession(time * 1000, vals) }
-                    .sortedByDescending { it.date }
-
+            combine(schemasFlow, baseValuesFlow, executionValuesFlow) { schemas, baseValues, execValues ->
                 val draft = schemas.associate { schema ->
-                    val existing = values.find { it.schemaId == schema.id }
-                    schema.fieldName to (existing?.value ?: schema.defaultValue ?: "")
+                    val execValue = execValues.find { it.schemaId == schema.id }
+                    val baseValue = baseValues.find { it.schemaId == schema.id }
+                    
+                    val value = when {
+                        execValue != null -> execValue.actualValue
+                        schema.executionTrackingMode == ExecutionTrackingMode.RECORD_ACTUAL -> ""
+                        else -> baseValue?.value ?: schema.defaultValue ?: ""
+                    }
+                    schema.fieldName to value
                 }
 
                 _uiState.update { it.copy(
@@ -60,9 +74,8 @@ class ExecuteViewModel @Inject constructor(
                     nodeType = type,
                     schemas = schemas,
                     fieldValues = draft,
-                    history = history,
                     isLoading = false,
-                    hasUnsavedChanges = false // Reset on load
+                    hasUnsavedChanges = false
                 ) }
             }.collect()
         }
@@ -99,28 +112,47 @@ class ExecuteViewModel @Inject constructor(
 
             state.fieldValues.forEach { (fieldName, value) ->
                 val schema = state.schemas.find { it.fieldName == fieldName } ?: return@forEach
-                val existingValue = valueRepo.getByNodeAndSchema(node.id, schema.id)
+                
+                if (node.instanceId != null && schema.editableInExecution) {
+                    // Save to execution values
+                    val existingExec = executionRepo.getByNodeAndDate(node.id, node.createdAt).find { it.schemaId == schema.id }
+                    
+                    val plannedValue = if (node.sourceTemplateNodeId != null) {
+                        valueRepo.getByNodeAndSchema(node.sourceTemplateNodeId, schema.id)?.value
+                    } else null
 
-                if (existingValue != null) {
-                    valueRepo.update(
-                        existingValue.copy(
-                            value = value,
-                            updatedAt = timestamp,
-                            syncStatus = SyncStatus.PENDING_SYNC
-                        )
-                    )
-                } else {
-                    valueRepo.upsert(
-                        NodeFieldValue(
+                    if (existingExec != null) {
+                        executionRepo.upsert(existingExec.copy(
+                            actualValue = value,
+                            updatedAt = timestamp
+                        ))
+                    } else {
+                        executionRepo.upsert(ExecutionFieldValue(
+                            dayInstanceId = node.instanceId,
+                            nodeId = node.id,
+                            sourceTemplateNodeId = node.sourceTemplateNodeId,
+                            schemaId = schema.id,
+                            fieldName = fieldName,
+                            plannedValue = plannedValue,
+                            actualValue = value,
+                            date = node.createdAt // or actual day start
+                        ))
+                    }
+                } else if (schema.editableInTemplate) {
+                    // Save to base values
+                    val existingValue = valueRepo.getByNodeAndSchema(node.id, schema.id)
+                    if (existingValue != null) {
+                        valueRepo.update(existingValue.copy(value = value, updatedAt = timestamp))
+                    } else {
+                        valueRepo.upsert(NodeFieldValue(
                             id = UUID.randomUUID().toString(),
                             nodeId = node.id,
                             schemaId = schema.id,
                             fieldName = fieldName,
                             value = value,
-                            updatedAt = timestamp,
-                            syncStatus = SyncStatus.PENDING_SYNC
-                        )
-                    )
+                            updatedAt = timestamp
+                        ))
+                    }
                 }
             }
             

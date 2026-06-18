@@ -528,6 +528,7 @@ private fun RecurrenceChip(label: String, isSelected: Boolean, onClick: () -> Un
 fun NewPlanningItemSheet(
     targets: List<PlanningTargetUi>,
     editingItem: PlanningItemUi? = null,
+    baseDate: Long = DateUtils.getStartOfDay(),
     onDismiss: () -> Unit,
     onConfirm: (title: String, desc: String?, type: PlanningItemType, nodeId: String?, nodePath: String?, dueDate: Long?, dueTime: String?) -> Unit
 ) {
@@ -545,8 +546,8 @@ fun NewPlanningItemSheet(
         mutableStateOf(editingItem?.type ?: PlanningItemType.TASK)
     }
 
-    var dueDate by remember(editingItem?.id) {
-        mutableStateOf(editingItem?.dueDate)
+    var dueDate by remember(editingItem?.id, baseDate) {
+        mutableStateOf(editingItem?.dueDate ?: if (!isEditMode) baseDate else null)
     }
 
     var dueTime by remember(editingItem?.id) {
@@ -662,6 +663,13 @@ fun NewPlanningItemSheet(
                 SelectableChip("Sin fecha", dueDate == null) {
                     dueDate = null
                 }
+                
+                if (baseDate != startOfToday && baseDate != startOfTomorrow) {
+                    SelectableChip("Seleccionado", dueDate == baseDate) {
+                        dueDate = baseDate
+                    }
+                }
+
                 SelectableChip("Hoy", dueDate == startOfToday) {
                     dueDate = startOfToday
                 }

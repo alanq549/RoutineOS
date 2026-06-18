@@ -17,6 +17,9 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
 
     companion object {
         private val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
+        private val REMINDERS_ENABLED = booleanPreferencesKey("reminders_enabled")
+        private val SHOW_HEATMAP = booleanPreferencesKey("show_heatmap")
+        private val SHOW_INSIGHTS = booleanPreferencesKey("show_insights")
     }
 
     val isOnboardingCompleted: Flow<Boolean> = context.settingsDataStore.data
@@ -24,9 +27,30 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
             preferences[ONBOARDING_COMPLETED] ?: false
         }
 
+    val isRemindersEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { it[REMINDERS_ENABLED] ?: true }
+
+    val isShowHeatmapEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { it[SHOW_HEATMAP] ?: true }
+
+    val isShowInsightsEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { it[SHOW_INSIGHTS] ?: true }
+
     suspend fun setOnboardingCompleted(completed: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[ONBOARDING_COMPLETED] = completed
         }
+    }
+
+    suspend fun setRemindersEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[REMINDERS_ENABLED] = enabled }
+    }
+
+    suspend fun setShowHeatmapEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_HEATMAP] = enabled }
+    }
+
+    suspend fun setShowInsightsEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[SHOW_INSIGHTS] = enabled }
     }
 }

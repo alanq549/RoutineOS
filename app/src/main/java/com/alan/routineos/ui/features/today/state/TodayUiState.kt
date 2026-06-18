@@ -15,7 +15,8 @@ data class TodayUiState(
     val totalCount: Int = 0,
     val timelineEntries: List<TimelineEntryUi> = emptyList(),
     val activeExceptions: List<ScheduleException> = emptyList(),
-    val unlinkedPlanningItems: List<PlanningLinkedItemUi> = emptyList()
+    val unlinkedPlanningItems: List<PlanningLinkedItemUi> = emptyList(),
+    val isNotificationPermissionGranted: Boolean = true
 )
 
 data class TimelineEntryUi(

@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.data.local.entities.Node
+import com.alan.routineos.data.local.entities.TemporalMode
 import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.data.local.entities.NodeSchedule
@@ -154,25 +155,39 @@ private fun NodeHierarchy(
     val isInherited = !hasOwnSchedule && inheritanceInfo != null
     
     val parentId = node.parentId
+    val parentNode = if (parentId != null) allNodes.find { it.id == parentId } else null
+    
+    // REGLA: Solo validar rango si el padre existe y NO es NONE/FLEXIBLE
+    // Si no hay padre (root), validar contra la actividad solo si la actividad no es NONE
+    val parentTemporalMode = parentNode?.temporalMode ?: TemporalMode.START_END // default to START_END for activity root check
+    
     val isOutside = if (hasOwnSchedule) {
-        val parentEffective = if (parentId != null) {
-            ScheduleResolver.resolveEffectiveSchedules(
-                nodeId = parentId,
-                allNodes = allNodes,
-                nodeSchedules = nodeSchedules,
-                activityName = activityName,
-                activityDays = activityDays,
-                activityStart = activityStart,
-                activityEnd = activityEnd
-            )
+        val activityIsNone = activityStart == "00:00" && activityEnd == "23:59"
+        
+        if (parentId == null && activityIsNone) {
+            false // Actividad raíz es NONE, no validar
+        } else if (parentNode != null && parentNode.temporalMode == TemporalMode.NONE) {
+            false // Padre es NONE, no validar
         } else {
-             if (activityDays.isNotEmpty() && activityStart != null) {
-                 activityDays.map { day -> 
-                     NodeSchedule(nodeId = node.id, dayOfWeek = day, startTime = activityStart, endTime = activityEnd ?: activityStart)
-                 }
-             } else emptyList()
+            val parentEffective = if (parentId != null) {
+                ScheduleResolver.resolveEffectiveSchedules(
+                    nodeId = parentId,
+                    allNodes = allNodes,
+                    nodeSchedules = nodeSchedules,
+                    activityName = activityName,
+                    activityDays = activityDays,
+                    activityStart = activityStart,
+                    activityEnd = activityEnd
+                )
+            } else {
+                 if (activityDays.isNotEmpty() && activityStart != null) {
+                     activityDays.map { day -> 
+                         NodeSchedule(nodeId = node.id, dayOfWeek = day, startTime = activityStart, endTime = activityEnd ?: activityStart)
+                     }
+                 } else emptyList()
+            }
+            ScheduleResolver.isOutsideRange(schedules, parentEffective)
         }
-        ScheduleResolver.isOutsideRange(schedules, parentEffective)
     } else {
         false
     }

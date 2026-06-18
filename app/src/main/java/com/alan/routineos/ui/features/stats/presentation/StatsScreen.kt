@@ -48,65 +48,61 @@ fun StatsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp)
         ) {
-            // 1. CORE HUMAN METRICS (Integrated hierarchy)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                MetricItem(
-                    label = "Consistencia",
-                    value = "${(uiState.completionRate * 100).toInt()}%",
-                    trend = "↑ 4%",
-                    modifier = Modifier.weight(1f)
+            // 1. RESUMEN PRINCIPAL (Debe leerse primero)
+            uiState.weeklySummary?.let { weekly ->
+                WeeklyProgressCard(
+                    averageCompletionRate = weekly.averageCompletionRate,
+                    totalSkippedCount = weekly.totalSkippedCount,
+                    totalModifiedCount = weekly.totalModifiedCount,
+                    hasEnoughData = uiState.hasEnoughWeeklyData,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                MetricItem(
-                    label = "Racha Actual",
-                    value = "${uiState.currentStreak}D",
-                    color = ColorPending,
-                    modifier = Modifier.weight(1f)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            uiState.consistency?.let { consistency ->
+                ConsistencyCard(
+                    consistency = consistency,
+                    hasEnoughData = uiState.hasAnyActivityData,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // 2. ACTIVITY EXPLORER (Selection as exploration)
+            // 2. EXPLORADOR INTEGRADO (Acceso rápido a actividad humana)
             Text(
-                text = "ANÁLISIS DE ACTIVIDAD", 
-                style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp), 
+                text = "ANÁLISIS DE ACTIVIDAD",
+                style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
                 color = ColorTextMuted
             )
             Spacer(modifier = Modifier.height(12.dp))
 
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showNodePicker = true },
-                color = ColorSurface,
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp), 
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = uiState.selectedNode?.name ?: "Explorar rutina...", 
-                            style = TitleNode.copy(fontSize = 15.sp), 
-                            color = if (uiState.selectedNode == null) ColorTextMuted else ColorText
-                        )
-                    }
-                    Icon(Icons.Default.ChevronRight, null, tint = ColorTextMuted, modifier = Modifier.size(16.dp))
-                }
+            InlineActivityExplorer(
+                query = uiState.nodeSearchQuery,
+                onQueryChange = viewModel::updateSearchQuery,
+                selectedActivity = uiState.selectedActivity,
+                onSelectActivity = viewModel::selectActivity,
+                availableActivities = uiState.availableActivities,
+                onOpenFullList = { showNodePicker = true }
+            )
+
+            // 3. ACTIVITY DETAIL (Deep dive)
+            if (uiState.selectedActivity != null && uiState.activityDetail != null) {
+                Spacer(modifier = Modifier.height(24.dp))
+                ActivityDetailCard(
+                    activityName = uiState.selectedActivity!!.displayName,
+                    stats = uiState.activityDetail!!,
+                    hasEnoughHistory = uiState.hasEnoughActivityHistory,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
-            // 3. DYNAMIC EVOLUTION SECTION
-            if (uiState.selectedNode != null) {
-                Spacer(modifier = Modifier.height(32.dp))
+            // 4. EVOLUCIÓN DINÁMICA (Si hay selección y campos de métricas)
+            if (uiState.selectedActivity != null) {
+                Spacer(modifier = Modifier.height(24.dp))
                 
-                // Field Selector using custom Premium Pills/Segmented Control
                 if (uiState.availableFields.isNotEmpty()) {
                     CustomSegmentedControl(
                         options = uiState.availableFields.map { it.fieldLabel },
@@ -116,15 +112,14 @@ fun StatsScreen(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                // Organic Integrated Chart
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(240.dp)
+                        .height(200.dp)
                         .background(ColorSurface, RoundedCornerShape(16.dp))
-                        .padding(vertical = 32.dp, horizontal = 4.dp)
+                        .padding(vertical = 24.dp, horizontal = 4.dp)
                 ) {
                     if (uiState.selectedField != null && uiState.dataPoints.size >= 2) {
                         SparklineChart(
@@ -151,28 +146,57 @@ fun StatsScreen(
                         }
                     }
                 }
-                
-                if (uiState.dataPoints.size >= 2) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "EVOLUCIÓN BASADA EN ÚLTIMOS ${uiState.dataPoints.size} REGISTROS",
-                        style = MetaMono.copy(fontSize = 8.sp, letterSpacing = 1.sp),
-                        color = ColorTextMuted,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 5. HEATMAP REAL (Evolución de aportaciones)
+            ContributionHeatmapCard(
+                heatmapData = uiState.heatmapData,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 6. INSIGHTS OPERATIVOS
+            Text(
+                text = "INSIGHTS OPERATIVOS",
+                style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
+                color = ColorTextMuted
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (uiState.dailyInsights.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    uiState.dailyInsights.take(2).forEach { insight ->
+                        InsightCard(insight = insight, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             } else {
-                // Empty state or summary view
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 64.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "SELECCIONA UNA ACTIVIDAD PARA VER SU PROGRESIÓN",
-                        style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 0.5.sp),
-                        color = ColorTextMuted
+                Text(
+                    text = "Aún no hay suficientes datos para generar insights.",
+                    style = MetaMono.copy(fontSize = 11.sp),
+                    color = ColorTextMuted
+                )
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 7. FRICCIÓN (Ajustes)
+            MostAdjustedActivitiesCard(
+                activities = uiState.mostAdjustedActivities,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 8. DURACIÓN PLANEADA VS REAL (Solo si hay datos de hoy)
+            uiState.dailySummary?.let { daily ->
+                if (daily.actualDurationMinutes > 0) {
+                    PlannedVsActualCard(
+                        plannedDurationMinutes = daily.plannedDurationMinutes,
+                        actualDurationMinutes = daily.actualDurationMinutes,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -182,12 +206,12 @@ fun StatsScreen(
 
         if (showNodePicker) {
             NodePickerSheet(
-                nodes = uiState.availableNodes,
+                activities = uiState.availableActivities,
                 searchQuery = uiState.nodeSearchQuery,
                 onSearchChange = viewModel::updateSearchQuery,
                 onDismiss = { showNodePicker = false },
                 onSelect = {
-                    viewModel.selectNode(it)
+                    viewModel.selectActivity(it)
                     showNodePicker = false
                 }
             )
@@ -212,7 +236,7 @@ private fun StatsTopBar() {
                 color = ColorText
             )
             Text(
-                text = "HISTORIAL OPERATIVO",
+                text = "CÓMO SE COMPORTAN TUS DÍAS",
                 style = MetaMono.copy(fontSize = 10.sp, color = ColorTextDim)
             )
         }

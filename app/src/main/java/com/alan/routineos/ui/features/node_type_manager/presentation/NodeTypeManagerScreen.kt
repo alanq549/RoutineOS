@@ -277,14 +277,17 @@ fun NodeTypeManagerScreen(
         if (showAddSchemaSheet && uiState.selectedType != null) {
             AddSchemaSheet(
                 onDismiss = { showAddSchemaSheet = false },
-                onAdd = { name, label, type, default, unit ->
+                onAdd = { name, label, type, default, unit, inTemplate, inExec, mode ->
                     viewModel.addSchemaFull(
                         uiState.selectedType!!.id,
                         name,
                         label,
                         type,
                         default,
-                        unit
+                        unit,
+                        inTemplate,
+                        inExec,
+                        mode
                     )
                     showAddSchemaSheet = false
                 }

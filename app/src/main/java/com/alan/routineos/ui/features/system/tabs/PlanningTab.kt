@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -157,6 +158,7 @@ fun PlanningTab(
         NewPlanningItemSheet(
             targets = state.planningTargets,
             editingItem = editingPlanningItem,
+            baseDate = state.selectedDate,
             onDismiss = {
                 showNewPlanningItem = false
                 editingPlanningItem = null
@@ -273,25 +275,27 @@ private fun RoutineChangesList(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (adaptations.isEmpty()) {
-            EmptyPlanningState(
-                title = "No hay cambios de rutina para este día.",
-                subtitle = "Cuando tu rutina cambie, aparecerán aquí."
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp)
-            ) {
-                items(adaptations, key = { it.id }) { item ->
-                    AdaptationCard(
-                        dateRange = DateUtils.formatRange(item.dateFrom, item.dateTo),
-                        title = item.label,
-                        type = mapIntentionToType(item.label),
-                        recurrence = item.recurrenceType,
-                        onDelete = { onDelete(item) }
-                    )
+        Box(modifier = Modifier.weight(1f)) {
+            if (adaptations.isEmpty()) {
+                EmptyPlanningState(
+                    title = "No hay cambios de rutina para este día.",
+                    subtitle = "Cuando tu rutina cambie, aparecerán aquí."
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp)
+                ) {
+                    items(adaptations, key = { it.id }) { item ->
+                        AdaptationCard(
+                            dateRange = DateUtils.formatRange(item.dateFrom, item.dateTo),
+                            title = item.label,
+                            type = mapIntentionToType(item.label),
+                            recurrence = item.recurrenceType,
+                            onDelete = { onDelete(item) }
+                        )
+                    }
                 }
             }
         }
@@ -330,70 +334,72 @@ private fun TasksAndNotesList(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        if (items.isEmpty()) {
-            EmptyPlanningState(
-                title = "Todavía no tienes tareas ni notas para este día.",
-                subtitle = "Pronto podrás vincular tareas, recordatorios y notas a una actividad o materia."
-            )
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp)
-            ) {
-                if (pendingTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("PENDIENTES (${pendingTasks.size})", ColorTextDim)
+        Box(modifier = Modifier.weight(1f)) {
+            if (items.isEmpty()) {
+                EmptyPlanningState(
+                    title = "Todavía no tienes tareas ni notas para este día.",
+                    subtitle = "Pronto podrás vincular tareas, recordatorios y notas a una actividad o materia."
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp)
+                ) {
+                    if (pendingTasks.isNotEmpty()) {
+                        item {
+                            SectionHeader("PENDIENTES (${pendingTasks.size})", ColorTextDim)
+                        }
+                        items(pendingTasks, key = { it.id }) { item ->
+                            PlanningItemCard(
+                                item = item,
+                                onToggle = { onToggle(item.id) },
+                                onEdit = { onEdit(item) },
+                                onDelete = { onDelete(item) }
+                            )
+                        }
                     }
-                    items(pendingTasks, key = { it.id }) { item ->
-                        PlanningItemCard(
-                            item = item,
-                            onToggle = { onToggle(item.id) },
-                            onEdit = { onEdit(item) },
-                            onDelete = { onDelete(item) }
-                        )
-                    }
-                }
 
-                if (reminders.isNotEmpty()) {
-                    item {
-                        SectionHeader("RECORDATORIOS (${reminders.size})", Color(0xFF2196F3))
+                    if (reminders.isNotEmpty()) {
+                        item {
+                            SectionHeader("RECORDATORIOS (${reminders.size})", Color(0xFF2196F3))
+                        }
+                        items(reminders, key = { it.id }) { item ->
+                            PlanningItemCard(
+                                item = item,
+                                onToggle = { onToggle(item.id) },
+                                onEdit = { onEdit(item) },
+                                onDelete = { onDelete(item) }
+                            )
+                        }
                     }
-                    items(reminders, key = { it.id }) { item ->
-                        PlanningItemCard(
-                            item = item,
-                            onToggle = { onToggle(item.id) },
-                            onEdit = { onEdit(item) },
-                            onDelete = { onDelete(item) }
-                        )
-                    }
-                }
 
-                if (notes.isNotEmpty()) {
-                    item {
-                        SectionHeader("NOTAS (${notes.size})", Color.Gray)
+                    if (notes.isNotEmpty()) {
+                        item {
+                            SectionHeader("NOTAS (${notes.size})", Color.Gray)
+                        }
+                        items(notes, key = { it.id }) { item ->
+                            PlanningItemCard(
+                                item = item,
+                                onToggle = { onToggle(item.id) },
+                                onEdit = { onEdit(item) },
+                                onDelete = { onDelete(item) }
+                            )
+                        }
                     }
-                    items(notes, key = { it.id }) { item ->
-                        PlanningItemCard(
-                            item = item,
-                            onToggle = { onToggle(item.id) },
-                            onEdit = { onEdit(item) },
-                            onDelete = { onDelete(item) }
-                        )
-                    }
-                }
 
-                if (completedTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("COMPLETADAS (${completedTasks.size})", ColorTextMuted)
-                    }
-                    items(completedTasks, key = { it.id }) { item ->
-                        PlanningItemCard(
-                            item = item,
-                            onToggle = { onToggle(item.id) },
-                            onEdit = { onEdit(item) },
-                            onDelete = { onDelete(item) }
-                        )
+                    if (completedTasks.isNotEmpty()) {
+                        item {
+                            SectionHeader("COMPLETADAS (${completedTasks.size})", ColorTextMuted)
+                        }
+                        items(completedTasks, key = { it.id }) { item ->
+                            PlanningItemCard(
+                                item = item,
+                                onToggle = { onToggle(item.id) },
+                                onEdit = { onEdit(item) },
+                                onDelete = { onDelete(item) }
+                            )
+                        }
                     }
                 }
             }
@@ -420,7 +426,8 @@ private fun EmptyPlanningState(title: String, subtitle: String) {
     }
     Box(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .heightIn(min = 200.dp)
             .padding(40.dp),
         contentAlignment = Alignment.Center
     ) {

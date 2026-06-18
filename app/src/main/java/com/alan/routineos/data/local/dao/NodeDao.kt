@@ -21,6 +21,9 @@ interface NodeDao {
     @Query("SELECT * FROM nodes WHERE instanceId IS NULL AND deletedAt IS NULL")
     fun getAllTemplateNodes(): Flow<List<Node>>
 
+    @Query("SELECT * FROM nodes WHERE instanceId IS NULL")
+    fun getAllTemplateNodesIncludingDeleted(): Flow<List<Node>>
+
     @Query("SELECT * FROM nodes WHERE instanceId IS NULL AND deletedAt IS NULL")
     suspend fun getAllTemplateNodesSync(): List<Node>
 
@@ -47,4 +50,15 @@ interface NodeDao {
 
     @Query("DELETE FROM nodes WHERE instanceId IN (SELECT id FROM day_instances WHERE date = :date)")
     suspend fun deleteByDate(date: Long)
+
+    @Query("SELECT * FROM nodes WHERE instanceId IS NOT NULL")
+    fun getAllInstanceNodes(): Flow<List<Node>>
+
+    @Query("""
+        SELECT * FROM nodes 
+        WHERE instanceId IN (SELECT id FROM day_instances WHERE date = :date) 
+        AND deletedAt IS NULL 
+        AND instanceId IS NOT NULL
+    """)
+    fun getInstanceNodesForDate(date: Long): Flow<List<Node>>
 }

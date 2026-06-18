@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.alan.routineos.core.database.AppDatabase
 import com.alan.routineos.data.local.dao.DayInstanceDao
+import com.alan.routineos.data.local.dao.ExecutionFieldValueDao
 import com.alan.routineos.data.local.dao.FieldValueDao
 import com.alan.routineos.data.local.dao.MetadataSchemaDao
 import com.alan.routineos.data.local.dao.NodeDao
@@ -56,6 +57,10 @@ object DatabaseModule {
 
     @Provides
     fun provideFieldValueDao(db: AppDatabase): FieldValueDao = db.fieldValueDao()
+
+    @Provides
+    fun provideExecutionFieldValueDao(db: AppDatabase): ExecutionFieldValueDao =
+        db.executionFieldValueDao()
 
     @Provides
     fun provideTemplateDao(db: AppDatabase): TemplateDao = db.templateDao()

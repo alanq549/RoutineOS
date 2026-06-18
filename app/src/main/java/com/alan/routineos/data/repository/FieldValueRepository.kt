@@ -34,4 +34,7 @@ class FieldValueRepository @Inject constructor(
 
     fun getHistoryByTemplateNode(templateNodeId: String, fieldName: String): Flow<List<NodeFieldValue>> =
         fieldValueDao.getHistoryByTemplateNode(templateNodeId, fieldName)
+
+    fun getHistoryByTemplateNodes(templateNodeIds: List<String>, fieldName: String): Flow<List<NodeFieldValue>> =
+        fieldValueDao.getHistoryByTemplateNodes(templateNodeIds, fieldName)
 }

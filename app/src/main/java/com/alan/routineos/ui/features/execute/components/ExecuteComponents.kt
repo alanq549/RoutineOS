@@ -17,6 +17,7 @@ import com.alan.routineos.ui.theme.*
 fun DynamicField(
     schema: NodeMetadataSchema,
     currentValue: String,
+    readonly: Boolean = false,
     onValueChange: (String) -> Unit
 ) {
     Column {
@@ -33,6 +34,7 @@ fun DynamicField(
                     value = currentValue,
                     unit = schema.unit,
                     stepSize = schema.stepSize ?: 1f,
+                    readonly = readonly,
                     onValueChange = onValueChange
                 )
             }
@@ -42,6 +44,7 @@ fun DynamicField(
                     value = currentValue,
                     unit = "min",
                     stepSize = 1f,
+                    readonly = readonly,
                     onValueChange = onValueChange
                 )
             }
@@ -51,13 +54,17 @@ fun DynamicField(
                     Text(
                         if (currentValue.toBoolean()) "SÍ" else "NO",
                         style = TitleNode,
-                        color = ColorText
+                        color = if (readonly) ColorTextDim else ColorText
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Switch(
                         checked = currentValue.toBoolean(),
                         onCheckedChange = { onValueChange(it.toString()) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = ColorExec)
+                        enabled = !readonly,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = if (readonly) ColorExec.copy(alpha = 0.5f) else ColorExec,
+                            disabledCheckedThumbColor = ColorExec.copy(alpha = 0.3f)
+                        )
                     )
                 }
             }
@@ -68,11 +75,15 @@ fun DynamicField(
                     onValueChange = onValueChange,
                     modifier = Modifier.fillMaxWidth(),
                     textStyle = TitleNode,
+                    readOnly = readonly,
+                    enabled = !readonly,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = ColorText,
                         unfocusedTextColor = ColorText,
+                        disabledTextColor = ColorTextDim,
                         focusedBorderColor = ColorExec,
-                        unfocusedBorderColor = ColorBorder
+                        unfocusedBorderColor = ColorBorder,
+                        disabledBorderColor = ColorBorder.copy(alpha = 0.5f)
                     )
                 )
             }
@@ -85,46 +96,51 @@ fun NumericPicker(
     value: String,
     unit: String?,
     stepSize: Float,
+    readonly: Boolean = false,
     onValueChange: (String) -> Unit
 ) {
     val numericValue = value.toFloatOrNull() ?: 0f
 
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(
-            onClick = { onValueChange((numericValue - stepSize).toString()) },
-            modifier = Modifier.size(48.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = ColorSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("-", color = ColorText, fontSize = 24.sp)
+        if (!readonly) {
+            Surface(
+                onClick = { onValueChange((numericValue - stepSize).toString()) },
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = ColorSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, ColorBorder)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("-", color = ColorText, fontSize = 24.sp)
+                }
             }
         }
 
         Column(
-            modifier = Modifier.padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.padding(horizontal = if (readonly) 0.dp else 24.dp),
+            horizontalAlignment = if (readonly) Alignment.Start else Alignment.CenterHorizontally
         ) {
             Text(
                 text = value,
-                style = MonoTimer.copy(fontSize = 32.sp),
-                color = ColorText
+                style = MonoTimer.copy(fontSize = if (readonly) 24.sp else 32.sp),
+                color = if (readonly) ColorTextDim else ColorText
             )
             if (unit != null) {
                 Text(text = unit, style = MetaMono, color = ColorTextDim)
             }
         }
 
-        Surface(
-            onClick = { onValueChange((numericValue + stepSize).toString()) },
-            modifier = Modifier.size(48.dp),
-            shape = RoundedCornerShape(8.dp),
-            color = ColorSurface,
-            border = androidx.compose.foundation.BorderStroke(1.dp, ColorExec)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text("+", color = ColorExec, fontSize = 24.sp)
+        if (!readonly) {
+            Surface(
+                onClick = { onValueChange((numericValue + stepSize).toString()) },
+                modifier = Modifier.size(48.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = ColorSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, ColorExec)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("+", color = ColorExec, fontSize = 24.sp)
+                }
             }
         }
     }

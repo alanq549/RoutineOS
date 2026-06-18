@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.alan.routineos.data.local.Converters
 import com.alan.routineos.data.local.dao.DayInstanceDao
+import com.alan.routineos.data.local.dao.ExecutionFieldValueDao
 import com.alan.routineos.data.local.dao.FieldValueDao
 import com.alan.routineos.data.local.dao.MetadataSchemaDao
 import com.alan.routineos.data.local.dao.NodeDao
@@ -18,6 +19,7 @@ import com.alan.routineos.data.local.dao.SyncDao
 import com.alan.routineos.data.local.dao.TemplateDao
 import com.alan.routineos.data.local.dao.UserDao
 import com.alan.routineos.data.local.entities.DayInstance
+import com.alan.routineos.data.local.entities.ExecutionFieldValue
 import com.alan.routineos.data.local.entities.Node
 import com.alan.routineos.data.local.entities.NodeFieldValue
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
@@ -37,6 +39,7 @@ import com.alan.routineos.data.local.entities.UserEntity
         NodeType::class,
         NodeMetadataSchema::class,
         NodeFieldValue::class,
+        ExecutionFieldValue::class,
         RoutineTemplate::class,
         Schedule::class,
         DayInstance::class,
@@ -45,7 +48,7 @@ import com.alan.routineos.data.local.entities.UserEntity
         NodeSchedule::class,
         PlanningItemEntity::class
     ],
-    version = 1, // solo yo tengo la app y borro y reinstalo la app sin problemas así que no importa ( cambiara en produccion )
+    version = 9, // synchronized with exported schemas
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -55,6 +58,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun nodeTypeDao(): NodeTypeDao
     abstract fun metadataSchemaDao(): MetadataSchemaDao
     abstract fun fieldValueDao(): FieldValueDao
+    abstract fun executionFieldValueDao(): ExecutionFieldValueDao
     abstract fun templateDao(): TemplateDao
     abstract fun dayInstanceDao(): DayInstanceDao
     abstract fun scheduleDao(): ScheduleDao

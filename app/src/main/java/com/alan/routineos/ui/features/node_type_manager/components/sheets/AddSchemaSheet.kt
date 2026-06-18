@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.data.local.entities.ExecutionTrackingMode
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.ui.features.node_type_manager.components.schema.BoolOption
 import com.alan.routineos.ui.features.node_type_manager.components.schema.FieldLabel
@@ -28,6 +29,7 @@ import com.alan.routineos.ui.features.node_type_manager.components.schema.Manage
 import com.alan.routineos.ui.features.node_type_manager.internal.colors
 import com.alan.routineos.ui.features.node_type_manager.internal.displayName
 import com.alan.routineos.ui.features.node_type_manager.internal.shortLabel
+import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
 
@@ -35,10 +37,24 @@ import com.alan.routineos.ui.theme.TitleNode
 @Composable
 fun AddSchemaSheet(
     onDismiss: () -> Unit,
-    onAdd: (fieldName: String, label: String, type: FieldType, default: String?, unit: String?) -> Unit
+    onAdd: (
+        fieldName: String,
+        label: String,
+        type: FieldType,
+        default: String?,
+        unit: String?,
+        editableInTemplate: Boolean,
+        editableInExecution: Boolean,
+        trackingMode: ExecutionTrackingMode
+    ) -> Unit
 ) {
     var name         by remember { mutableStateOf("") }
     var selectedType by remember { mutableStateOf(FieldType.NUMBER) }
+
+    // Flags FIX 18
+    var editableInTemplate by remember { mutableStateOf(true) }
+    var editableInExecution by remember { mutableStateOf(false) }
+    var trackingMode by remember { mutableStateOf(ExecutionTrackingMode.NONE) }
 
     // Número / Texto
     var defaultText by remember { mutableStateOf("") }
@@ -306,6 +322,44 @@ fun AddSchemaSheet(
                 }
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+            HorizontalDivider(color = Color(0xFF2A2A2A))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Configuración de Ejecución (FIX 18) ──────
+            FieldLabel("Uso del campo")
+            Spacer(modifier = Modifier.height(12.dp))
+
+            UsageOption(
+                title = "Solo dato base",
+                desc = "Estructural, no se edita al ejecutar (ej: Aula, Profesor)",
+                isSelected = !editableInExecution && trackingMode == ExecutionTrackingMode.NONE,
+                onClick = {
+                    editableInExecution = false
+                    trackingMode = ExecutionTrackingMode.NONE
+                }
+            )
+
+            UsageOption(
+                title = "Ajuste del día",
+                desc = "Se puede cambiar el valor base para hoy (ej: Prioridad)",
+                isSelected = editableInExecution && trackingMode == ExecutionTrackingMode.OVERRIDE_VALUE,
+                onClick = {
+                    editableInExecution = true
+                    trackingMode = ExecutionTrackingMode.OVERRIDE_VALUE
+                }
+            )
+
+            UsageOption(
+                title = "Registro de ejecución",
+                desc = "Registra lo realizado hoy (ej: Repeticiones, Peso)",
+                isSelected = editableInExecution && trackingMode == ExecutionTrackingMode.RECORD_ACTUAL,
+                onClick = {
+                    editableInExecution = true
+                    trackingMode = ExecutionTrackingMode.RECORD_ACTUAL
+                }
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             val canSave = name.isNotBlank() && when (selectedType) {
@@ -321,7 +375,7 @@ fun AddSchemaSheet(
                         else              -> defaultText.ifBlank { null }
                     }
                     val unit = if (selectedType == FieldType.NUMBER) unitText.ifBlank { null } else null
-                    onAdd(name, name, selectedType, default, unit)
+                    onAdd(name, name, selectedType, default, unit, editableInTemplate, editableInExecution, trackingMode)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -339,6 +393,40 @@ fun AddSchemaSheet(
                     color = if (canSave) Color.White else Color(0xFF444444)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun UsageOption(
+    title: String,
+    desc: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable { onClick() },
+        color = if (isSelected) Color(0xFF1565C0).copy(alpha = 0.1f) else Color.Transparent,
+        shape = RoundedCornerShape(8.dp),
+        border = androidx.compose.foundation.BorderStroke(
+            if (isSelected) 1.dp else 0.5.dp,
+            if (isSelected) Color(0xFF1565C0) else Color(0xFF2A2A2A)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                title,
+                style = TitleNode.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
+                color = if (isSelected) Color.White else Color(0xFFB0B0B0)
+            )
+            Text(
+                desc,
+                style = MetaMono.copy(fontSize = 9.sp),
+                color = if (isSelected) Color.White.copy(alpha = 0.7f) else Color(0xFF666666)
+            )
         }
     }
 }

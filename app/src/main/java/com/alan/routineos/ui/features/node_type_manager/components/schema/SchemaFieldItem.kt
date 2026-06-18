@@ -15,10 +15,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.alan.routineos.data.local.entities.ExecutionTrackingMode
 import com.alan.routineos.data.local.entities.FieldType
 import com.alan.routineos.data.local.entities.NodeMetadataSchema
 import com.alan.routineos.ui.features.node_type_manager.internal.colors
 import com.alan.routineos.ui.features.node_type_manager.internal.shortLabel
+import com.alan.routineos.ui.theme.ColorExec
 import com.alan.routineos.ui.theme.MetaMono
 import com.alan.routineos.ui.theme.TitleNode
 
@@ -34,62 +36,85 @@ fun SchemaFieldItem(schema: NodeMetadataSchema, onDelete: () -> Unit) {
         shape = RoundedCornerShape(8.dp),
         border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF2A2A2A))
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // pastilla de tipo
-            Surface(color = bgColor, shape = RoundedCornerShape(5.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // pastilla de tipo
+                Surface(color = bgColor, shape = RoundedCornerShape(5.dp)) {
+                    Text(
+                        schema.fieldType.shortLabel(),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Medium),
+                        color = txtColor
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // nombre
                 Text(
-                    schema.fieldType.shortLabel(),
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Medium),
-                    color = txtColor
+                    schema.fieldName,
+                    modifier = Modifier.weight(1f),
+                    style = TitleNode.copy(fontSize = 12.sp),
+                    color = Color(0xFFE0E0E0)
                 )
-            }
-            Spacer(modifier = Modifier.width(8.dp))
 
-            // nombre
-            Text(
-                schema.fieldName,
-                modifier = Modifier.weight(1f),
-                style = TitleNode.copy(fontSize = 12.sp),
-                color = Color(0xFFE0E0E0)
-            )
-
-            // metadata contextual
-            val hint = buildString {
-                schema.unit?.let { append(it) }
-                when (schema.fieldType) {
-                    FieldType.BOOLEAN -> schema.defaultValue?.let {
-                        append(" · def: ${if (it == "true") "Sí" else "No"}")
-                    }
-                    else -> schema.defaultValue?.let { append(" · def: $it") }
+                // botón eliminar
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(Color(0xFF1A1A1A), RoundedCornerShape(5.dp))
+                        .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(5.dp))
+                        .clickable { onDelete() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close, null,
+                        tint = Color(0xFF884444),
+                        modifier = Modifier.size(12.dp)
+                    )
                 }
             }
-            if (hint.isNotEmpty()) {
-                Text(
-                    text = hint,
-                    style = TitleNode.copy(fontSize = 10.sp),
-                    color = Color(0xFF444444),
-                    modifier = Modifier.padding(end = 8.dp)
-                )
-            }
-
-            // botón eliminar
-            Box(
-                modifier = Modifier
-                    .size(24.dp)
-                    .background(Color(0xFF1A1A1A), RoundedCornerShape(5.dp))
-                    .border(0.5.dp, Color(0xFF2A2A2A), RoundedCornerShape(5.dp))
-                    .clickable { onDelete() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.Close, null,
-                    tint = Color(0xFF884444),
-                    modifier = Modifier.size(12.dp)
-                )
+            
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // metadata contextual
+                val hint = buildString {
+                    schema.unit?.let { append(it) }
+                    when (schema.fieldType) {
+                        FieldType.BOOLEAN -> schema.defaultValue?.let {
+                            append(" · def: ${if (it == "true") "Sí" else "No"}")
+                        }
+                        else -> schema.defaultValue?.let { append(" · def: $it") }
+                    }
+                }
+                if (hint.isNotEmpty()) {
+                    Text(
+                        text = hint,
+                        style = TitleNode.copy(fontSize = 10.sp),
+                        color = Color(0xFF444444)
+                    )
+                }
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                val usageLabel = when {
+                    !schema.editableInExecution -> "ESTÁTICO"
+                    schema.executionTrackingMode == ExecutionTrackingMode.OVERRIDE_VALUE -> "AJUSTE"
+                    schema.executionTrackingMode == ExecutionTrackingMode.RECORD_ACTUAL -> "REGISTRO"
+                    else -> "N/A"
+                }
+                
+                Surface(
+                    color = if (schema.editableInExecution) ColorExec.copy(alpha = 0.1f) else Color(0xFF333333).copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(4.dp)
+                ) {
+                    Text(
+                        usageLabel,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                        style = MetaMono.copy(fontSize = 7.sp, fontWeight = FontWeight.Bold),
+                        color = if (schema.editableInExecution) ColorExec else Color(0xFF555555)
+                    )
+                }
             }
         }
     }

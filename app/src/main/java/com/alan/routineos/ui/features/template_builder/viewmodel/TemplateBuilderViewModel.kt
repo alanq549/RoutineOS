@@ -160,7 +160,16 @@ class TemplateBuilderViewModel @Inject constructor(
         _uiState.update { it.copy(endTime = time, hasUnsavedChanges = true) }
 
     fun updateTemporalMode(mode: TemporalMode) {
-        _uiState.update { state -> state.copy(temporalMode = mode, hasUnsavedChanges = true) }
+        _uiState.update { state ->
+            state.copy(
+                temporalMode = mode,
+                // Al cambiar a NONE, a efectos de validación, desactivamos el bloqueo por rango
+                // usando un rango universal que no activará isOutsideRange.
+                startTime = if (mode == TemporalMode.NONE) "00:00" else state.startTime,
+                endTime = if (mode == TemporalMode.NONE) "23:59" else state.endTime,
+                hasUnsavedChanges = true
+            )
+        }
     }
 
     fun updateDurationMinutes(minutes: Int) =

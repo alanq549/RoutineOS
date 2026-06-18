@@ -10,169 +10,159 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alan.routineos.ui.features.account.state.UserState
 import com.alan.routineos.ui.features.account.viewmodel.UserViewModel
+import com.alan.routineos.ui.features.account.viewmodel.SettingsViewModel
 import com.alan.routineos.ui.theme.*
 
 /**
- * ACCOUNT SCREEN: Premium Minimal / Calm Tech
- * Integrated with the personal operating system identity.
+ * SETTINGS CENTER (formerly Account Screen)
+ * Centralized configuration for the RoutineOS ecosystem.
  */
 @Composable
 fun AccountScreen(
     userViewModel: UserViewModel,
+    settingsViewModel: SettingsViewModel,
     onBack: () -> Unit,
     onLogout: () -> Unit,
-    onNavigateToAuth: () -> Unit
+    onNavigateToAuth: () -> Unit,
+    onNavigateToBackup: () -> Unit
 ) {
     val userState by userViewModel.userState.collectAsState()
+    val settingsState by settingsViewModel.uiState.collectAsState()
 
     Scaffold(
         containerColor = ColorBg,
         topBar = {
-            AccountTopBar(onBack)
+            SettingsTopBar(onBack)
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when (val state = userState) {
-                is UserState.Loading -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = ColorExec)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(32.dp)
+        ) {
+            // 0. User / Identity Section
+            UserIdentityHeader(
+                userState = userState,
+                onNavigateToAuth = onNavigateToAuth,
+                onLogout = { userViewModel.logout(onLogout) }
+            )
+
+            // 1. AGENDA
+            SettingsSection(title = "AGENDA", icon = Icons.Default.CalendarToday) {
+                ToggleRow(
+                    label = "Recordatorios de actividad",
+                    description = "Avisar antes de empezar",
+                    checked = settingsState.remindersEnabled,
+                    onCheckedChange = settingsViewModel::toggleReminders
+                )
+                ActionRow(label = "Tiempo de aviso", value = "5 min antes") { /* Future impl */ }
+                ActionRow(label = "Actividades flexibles", value = "Mostrar siempre") { /* Future impl */ }
+            }
+
+            // 2. ESTADÍSTICAS
+            SettingsSection(title = "ESTADÍSTICAS", icon = Icons.Default.BarChart) {
+                ToggleRow(
+                    label = "Mostrar mapa de calor",
+                    description = "Visualizar aportaciones diarias",
+                    checked = settingsState.showHeatmap,
+                    onCheckedChange = settingsViewModel::toggleHeatmap
+                )
+                ToggleRow(
+                    label = "Insights automáticos",
+                    description = "Consejos basados en historial",
+                    checked = settingsState.showInsights,
+                    onCheckedChange = settingsViewModel::toggleInsights
+                )
+                ActionRow(label = "Período de análisis", value = "90 días") { /* Future impl */ }
+            }
+
+            // 3. DATOS
+            SettingsSection(title = "DATOS Y PRIVACIDAD", icon = Icons.Default.Storage) {
+                ActionRow(
+                    label = "Copia de seguridad local",
+                    description = "Exportar base de datos a archivo",
+                    onClick = onNavigateToBackup
+                )
+                ActionRow(label = "Información de almacenamiento", value = "1.2 MB") { /* Future impl */ }
+            }
+
+            // 4. SISTEMA
+            SettingsSection(title = "SISTEMA", icon = Icons.Default.Settings) {
+                InfoRow(label = "Versión", value = "1.0.2 (Public Beta)")
+                InfoRow(label = "Base de Datos", value = "RoutineOS_Core_v9")
+                ActionRow(label = "Herramientas de diagnóstico") { /* Future impl */ }
+            }
+
+            Spacer(modifier = Modifier.height(40.dp))
+        }
+    }
+}
+
+@Composable
+private fun UserIdentityHeader(
+    userState: UserState,
+    onNavigateToAuth: () -> Unit,
+    onLogout: () -> Unit
+) {
+    Surface(
+        color = ColorSurface,
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        when (userState) {
+            is UserState.Success -> {
+                val user = userState.user
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp).background(ColorBg, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.Person, null, tint = ColorTextDim)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(user.name, style = TitleNode.copy(fontSize = 15.sp))
+                        Text(user.email, style = MetaMono.copy(fontSize = 9.sp), color = ColorTextDim)
+                    }
+                    IconButton(onClick = onLogout) {
+                        Icon(Icons.Default.Logout, null, tint = ColorPending, modifier = Modifier.size(20.dp))
                     }
                 }
-
-                is UserState.Success -> {
-                    val user = state.user
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+            }
+            else -> {
+                Row(
+                    modifier = Modifier.padding(16.dp).clickable { onNavigateToAuth() },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(48.dp).background(ColorBg, CircleShape),
+                        contentAlignment = Alignment.Center
                     ) {
-                        // User Identity Section
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .background(ColorSurface, CircleShape)
-                                .border(0.5.dp, ColorBorder, CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                modifier = Modifier.size(32.dp),
-                                tint = ColorTextDim
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = user.name,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 20.sp
-                            ),
-                            color = ColorText
-                        )
-                        
-                        Surface(
-                            color = ColorExec.copy(alpha = 0.1f),
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.padding(top = 8.dp)
-                        ) {
-                            Text(
-                                text = "Sincronización activa",
-                                style = MetaMono.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
-                                color = ColorExec,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(48.dp))
-
-                        // Settings Groups
-                        InfoSection(title = "Detalles de la cuenta") {
-                            InfoRow(label = "Correo", value = user.email)
-                            InfoRow(label = "ID de Sistema", value = user.id, isMono = true)
-                        }
-
-                        Spacer(modifier = Modifier.height(32.dp))
-
-                        // Action Area
-                        Button(
-                            onClick = {
-                                // Llamamos al proceso de logout y pasamos la navegación como callback
-                                userViewModel.logout(onComplete = onLogout)
-                            },
-                            modifier = Modifier.fillMaxWidth().height(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.Red.copy(alpha = 0.3f))
-                        ) {
-                            Text(
-                                "Cerrar sesión",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    color = Color.Red,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            )
-                        }
+                        Icon(Icons.Default.AccountCircle, null, tint = ColorTextDim)
                     }
-                }
-                else -> {
-                    // Idle state or Login Prompt
-                    Column(
-                        modifier = Modifier.fillMaxSize().padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = ColorTextMuted
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Text(
-                            text = "Sin sesión activa",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 18.sp
-                            ),
-                            color = ColorText
-                        )
-                        Text(
-                            text = "Inicia sesión para sincronizar tus datos",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = ColorTextDim,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(48.dp))
-
-                        Button(
-                            onClick = onNavigateToAuth,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Iniciar sesión", style = MaterialTheme.typography.labelLarge.copy(color = Color.White))
-                        }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text("Sincronización desactivada", style = TitleNode.copy(fontSize = 15.sp))
+                        Text("Toca para iniciar sesión", style = MetaMono.copy(fontSize = 9.sp), color = ColorExec)
                     }
                 }
             }
@@ -181,7 +171,101 @@ fun AccountScreen(
 }
 
 @Composable
-private fun AccountTopBar(onBack: () -> Unit) {
+private fun SettingsSection(
+    title: String,
+    icon: ImageVector,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+            Icon(icon, null, modifier = Modifier.size(14.dp), tint = ColorTextMuted)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = title,
+                style = MetaMono.copy(fontSize = 10.sp, letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold),
+                color = ColorTextMuted
+            )
+        }
+        Surface(
+            color = ColorSurface,
+            shape = RoundedCornerShape(12.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
+        ) {
+            Column {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    label: String,
+    description: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = TitleNode.copy(fontSize = 13.sp))
+            if (description != null) {
+                Text(description, style = MetaMono.copy(fontSize = 9.sp), color = ColorTextDim)
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = ColorExec,
+                uncheckedThumbColor = ColorTextDim,
+                uncheckedTrackColor = ColorBg
+            )
+        )
+    }
+}
+
+@Composable
+private fun ActionRow(
+    label: String,
+    value: String? = null,
+    description: String? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onClick() }.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = TitleNode.copy(fontSize = 13.sp))
+            if (description != null) {
+                Text(description, style = MetaMono.copy(fontSize = 9.sp), color = ColorTextDim)
+            }
+        }
+        if (value != null) {
+            Text(value, style = MetaMono.copy(fontSize = 10.sp), color = ColorTextMuted)
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Icon(Icons.Default.ChevronRight, null, modifier = Modifier.size(14.dp), tint = ColorTextMuted)
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = TitleNode.copy(fontSize = 13.sp), modifier = Modifier.weight(1f))
+        Text(value, style = MetaMono.copy(fontSize = 10.sp), color = ColorTextMuted)
+    }
+}
+
+@Composable
+private fun SettingsTopBar(onBack: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -197,65 +281,15 @@ private fun AccountTopBar(onBack: () -> Unit) {
                 .clickable { onBack() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = ColorTextDim,
-                modifier = Modifier.size(16.dp)
-            )
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = ColorTextDim, modifier = Modifier.size(16.dp))
         }
-        
         Spacer(modifier = Modifier.weight(1f))
-        
         Text(
-            text = "CUENTA",
-            style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 2.sp),
-            color = ColorTextDim
-        )
-        
-        Spacer(modifier = Modifier.weight(1f))
-        Spacer(modifier = Modifier.size(32.dp))
-    }
-}
-
-@Composable
-private fun InfoSection(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = title,
-            style = MetaMono.copy(fontSize = 9.sp, letterSpacing = 1.sp),
-            color = ColorTextMuted,
-            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
-        )
-        Surface(
-            color = ColorSurface,
-            shape = RoundedCornerShape(12.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                content()
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String, isMono: Boolean = false) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ColorTextDim
-        )
-        Text(
-            text = value,
-            style = if (isMono) MetaMono.copy(fontSize = 11.sp) else MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+            text = "CONFIGURACIÓN",
+            style = MetaMono.copy(fontSize = 11.sp, letterSpacing = 2.sp, fontWeight = FontWeight.Bold),
             color = ColorText
         )
+        Spacer(modifier = Modifier.weight(1f))
+        Spacer(modifier = Modifier.size(32.dp))
     }
 }

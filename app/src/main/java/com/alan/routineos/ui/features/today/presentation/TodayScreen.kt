@@ -23,6 +23,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import com.alan.routineos.notifications.NotificationPermissionHelper
 import com.alan.routineos.ui.features.system.state.PlanningItemType
 import com.alan.routineos.ui.features.today.components.TimelineIndicator
 import com.alan.routineos.ui.features.today.components.TodayActivityCard
@@ -41,7 +45,14 @@ fun TodayScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        viewModel.updateNotificationPermissionStatus(isGranted)
+    }
+
     var showQuickActions by remember { mutableStateOf(false) }
     var showEventSheet by remember { mutableStateOf(false) }
     var showPlanningSheet by remember { mutableStateOf(false) }
@@ -49,6 +60,9 @@ fun TodayScreen(
     var planningType by remember { mutableStateOf(PlanningItemType.TASK) }
 
     LaunchedEffect(Unit) {
+        viewModel.updateNotificationPermissionStatus(
+            NotificationPermissionHelper.hasNotificationPermission(context)
+        )
         viewModel.events.collectLatest { message ->
             snackbarHostState.showSnackbar(
                 message = message,
@@ -140,6 +154,16 @@ fun TodayScreen(
                     modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
+                    if (NotificationPermissionHelper.shouldRequestPermission() && !uiState.isNotificationPermissionGranted) {
+                        item {
+                            NotificationPermissionCard(
+                                onRequestPermission = {
+                                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            )
+                        }
+                    }
+
                     if (uiState.unlinkedPlanningItems.isNotEmpty()) {
                         item {
                             Text(
@@ -149,9 +173,18 @@ fun TodayScreen(
                                 modifier = Modifier.padding(start = 24.dp, top = 16.dp, bottom = 8.dp)
                             )
                         }
-                        items(uiState.unlinkedPlanningItems, key = { "unlinked_${it.id}" }) { item ->
-                            UnlinkedPlanningRow(item, onToggle = { viewModel.togglePlanningTask(item.id) })
+
+                        val groupedItems = uiState.unlinkedPlanningItems.groupBy { it.type }
+                        
+                        // Orden específico: Tareas -> Recordatorios -> Notas
+                        listOf(PlanningItemType.TASK, PlanningItemType.REMINDER, PlanningItemType.NOTE).forEach { type ->
+                            groupedItems[type]?.let { items ->
+                                items(items, key = { "unlinked_${it.id}" }) { item ->
+                                    UnlinkedPlanningRow(item, onToggle = { viewModel.togglePlanningTask(item.id) })
+                                }
+                            }
                         }
+
                         item {
                             Spacer(Modifier.height(16.dp))
                             HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp), color = ColorBorder.copy(alpha = 0.3f))
@@ -251,12 +284,66 @@ fun TodayScreen(
 }
 
 @Composable
+fun NotificationPermissionCard(onRequestPermission: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        color = ColorSurface,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, ColorBorder)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = ColorPlan.copy(alpha = 0.1f),
+                shape = CircleShape,
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Notifications, null, tint = ColorPlan, modifier = Modifier.size(20.dp))
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "Activar recordatorios",
+                    style = TitleNode.copy(fontSize = 14.sp),
+                    color = ColorText
+                )
+                Text(
+                    "Recibe avisos al iniciar tus actividades",
+                    style = MetaMono.copy(fontSize = 10.sp),
+                    color = ColorTextDim
+                )
+            }
+            TextButton(onClick = onRequestPermission) {
+                Text("ACTIVAR", style = MetaMono.copy(fontWeight = FontWeight.Bold), color = ColorExec)
+            }
+        }
+    }
+}
+
+@Composable
 fun UnlinkedPlanningRow(item: PlanningLinkedItemUi, onToggle: () -> Unit) {
     val isCompleted = item.status == com.alan.routineos.ui.features.system.state.PlanningStatus.COMPLETED
+    val icon = when (item.type) {
+        PlanningItemType.TASK -> if (isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked
+        PlanningItemType.NOTE -> Icons.Default.Note
+        PlanningItemType.REMINDER -> Icons.Default.Notifications
+    }
+    val iconColor = when (item.type) {
+        PlanningItemType.TASK -> if (isCompleted) ColorExec else ColorTextDim
+        PlanningItemType.NOTE -> ColorTextDim
+        PlanningItemType.REMINDER -> Color(0xFF2196F3)
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .padding(horizontal = 24.dp, vertical = 4.dp)
             .background(ColorSurface, RoundedCornerShape(8.dp))
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -264,26 +351,37 @@ fun UnlinkedPlanningRow(item: PlanningLinkedItemUi, onToggle: () -> Unit) {
         if (item.type == PlanningItemType.TASK) {
             IconButton(onClick = onToggle, modifier = Modifier.size(24.dp)) {
                 Icon(
-                    if (isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
+                    icon,
                     null,
-                    tint = if (isCompleted) ColorExec else ColorTextDim,
+                    tint = iconColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.width(12.dp))
         } else {
-            Icon(Icons.Default.Note, null, tint = ColorTextDim, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(12.dp))
+            Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = iconColor, modifier = Modifier.size(16.dp))
+            }
         }
-        Text(
-            text = item.title,
-            style = TitleNode.copy(
-                fontSize = 13.sp,
-                textDecoration = if (isCompleted) TextDecoration.LineThrough else null
-            ),
-            color = if (isCompleted) ColorTextDim else ColorText,
-            modifier = Modifier.weight(1f)
-        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.title,
+                style = TitleNode.copy(
+                    fontSize = 13.sp,
+                    textDecoration = if (isCompleted) TextDecoration.LineThrough else null
+                ),
+                color = if (isCompleted) ColorTextDim else ColorText
+            )
+            if (item.dueTime != null) {
+                Text(
+                    text = item.dueTime,
+                    style = MetaMono.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                    color = if (item.type == PlanningItemType.REMINDER) Color(0xFF2196F3) else ColorTextDim
+                )
+            }
+        }
     }
 }
 
