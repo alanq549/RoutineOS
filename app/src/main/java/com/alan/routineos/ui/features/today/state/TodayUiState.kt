@@ -39,7 +39,9 @@ data class TimelineEntryUi(
     val showTimeIndicatorBefore: Boolean = false,
     val wasShiftedByDomino: Boolean = false,
     val dominoReason: String? = null,
-    val planningInfo: PlanningIndicatorUi? = null
+    val planningInfo: PlanningIndicatorUi? = null,
+    val isSpontaneousEvent: Boolean = false,
+    val durationMinutes: Int = 0
 )
 
 data class ConflictResolutionUi(
@@ -58,7 +60,8 @@ data class ResolvedNodeUi(
     val isCompleted: Boolean = false,
     val isSkipped: Boolean = false,
     val fields: List<ResolvedFieldUi> = emptyList(),
-    val planningInfo: PlanningIndicatorUi? = null
+    val planningInfo: PlanningIndicatorUi? = null,
+    val durationMinutes: Int = 0
 )
 
 data class PlanningIndicatorUi(

@@ -25,6 +25,9 @@ class NodeOverrideRepository @Inject constructor(
     suspend fun upsert(override: NodeOverride) = nodeOverrideDao.upsert(override)
 
     suspend fun delete(override: NodeOverride) = nodeOverrideDao.delete(override)
+
+    suspend fun deleteSpecificOverrideSync(nodeId: String, instanceId: String, type: OverrideType) =
+        nodeOverrideDao.deleteSpecificOverrideSync(nodeId, instanceId, type)
     
     suspend fun deleteForNodeInstance(nodeId: String, instanceId: String) =
         nodeOverrideDao.deleteForNodeInstance(nodeId, instanceId)

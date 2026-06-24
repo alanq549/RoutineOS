@@ -25,6 +25,9 @@ interface NodeOverrideDao {
     @Delete
     suspend fun delete(override: NodeOverride)
     
+    @Query("DELETE FROM node_overrides WHERE nodeId = :nodeId AND instanceId = :instanceId AND overrideType = :type")
+    suspend fun deleteSpecificOverrideSync(nodeId: String, instanceId: String, type: OverrideType)
+
     @Query("DELETE FROM node_overrides WHERE nodeId = :nodeId AND instanceId = :instanceId")
     suspend fun deleteForNodeInstance(nodeId: String, instanceId: String)
 

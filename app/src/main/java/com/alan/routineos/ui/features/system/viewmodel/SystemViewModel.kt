@@ -168,6 +168,7 @@ class SystemViewModel @Inject constructor(
 
     // Planning Items
     fun createPlanningItem(title: String, desc: String?, type: PlanningItemType, nodeId: String? = null, nodePath: String? = null, dueDate: Long? = null, dueTime: String? = null) {
+        Log.d("PLANNING_DEBUG", "ACTION: createPlanningItem - title: $title, type: $type, nodeId: $nodeId")
         viewModelScope.launch {
             val newItem = PlanningItemUi(
                 id = UUID.randomUUID().toString(),
@@ -181,19 +182,38 @@ class SystemViewModel @Inject constructor(
                 status = PlanningStatus.PENDING
             )
             planningRepo.upsertPlanningItem(newItem.toEntity())
+            Log.d("PLANNING_DEBUG", "AFTER_CREATE_PLANNING: id=${newItem.id} | title=${newItem.title} | nodeId=$nodeId")
         }
     }
 
     fun updatePlanningItem(id: String, title: String, desc: String?, nodeId: String? = null, nodePath: String? = null, dueDate: Long? = null, dueTime: String? = null) {
+        Log.d("PLANNING_DEBUG", "ACTION: updatePlanningItem - id: $id, title: $title")
         viewModelScope.launch {
             val items = planningRepo.getAllPlanningItems().first()
-            val currentEntity = items.find { it.id == id } ?: return@launch
-            val updatedEntity = currentEntity.copy(title = title, description = desc, dueDate = dueDate, dueTime = dueTime, relatedNodeId = nodeId, relatedNodePath = nodePath, updatedAt = System.currentTimeMillis(), version = currentEntity.version + 1)
+            val currentEntity = items.find { it.id == id } ?: run {
+                Log.e("PLANNING_DEBUG", "UPDATE ERROR: item $id not found")
+                return@launch
+            }
+            
+            Log.d("PLANNING_DEBUG", "BEFORE_UPDATE_PLANNING: id=${currentEntity.id} | title=${currentEntity.title} | status=${currentEntity.status}")
+            
+            val updatedEntity = currentEntity.copy(
+                title = title, 
+                description = desc, 
+                dueDate = dueDate, 
+                dueTime = dueTime, 
+                relatedNodeId = nodeId, 
+                relatedNodePath = nodePath, 
+                updatedAt = System.currentTimeMillis(), 
+                version = currentEntity.version + 1
+            )
             planningRepo.upsertPlanningItem(updatedEntity)
+            Log.d("PLANNING_DEBUG", "AFTER_UPDATE_PLANNING: id=${updatedEntity.id} | title=${updatedEntity.title}")
         }
     }
 
     fun togglePlanningItem(id: String) {
+        Log.d("PLANNING_DEBUG", "ACTION: togglePlanningItem - id: $id")
         viewModelScope.launch {
             val itemsEntities = planningRepo.getAllPlanningItems().first()
             val currentEntity = itemsEntities.find { it.id == id } ?: return@launch
@@ -203,6 +223,7 @@ class SystemViewModel @Inject constructor(
     }
 
     fun deletePlanningItem(id: String) {
+        Log.d("PLANNING_DEBUG", "ACTION: deletePlanningItem - id: $id")
         viewModelScope.launch {
             planningRepo.deletePlanningItem(id)
         }

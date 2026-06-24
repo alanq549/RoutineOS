@@ -55,6 +55,9 @@ fun TodayScreen(
 
     var showQuickActions by remember { mutableStateOf(false) }
     var showEventSheet by remember { mutableStateOf(false) }
+    var showCustomizeSheet by remember { mutableStateOf<TimelineEntryUi?>(null) }
+    var editingEvent by remember { mutableStateOf<TimelineEntryUi?>(null) }
+    var showDeleteConfirm by remember { mutableStateOf<String?>(null) }
     var showPlanningSheet by remember { mutableStateOf(false) }
     var showActivityPicker by remember { mutableStateOf<String?>(null) }
     var planningType by remember { mutableStateOf(PlanningItemType.TASK) }
@@ -211,16 +214,19 @@ fun TodayScreen(
                             conflictResolutionSuggestions = entry.conflictResolutionSuggestions,
                             planningInfo = entry.planningInfo,
                             resolvedNodes = entry.resolvedNodes,
+                            isSpontaneousEvent = entry.isSpontaneousEvent,
                             onNodeToggle = { nodeId -> viewModel.toggleNodeCompletion(nodeId) },
                             onNodeClick = { nodeId -> onNavigateToExecute(nodeId) },
                             onComplete = { viewModel.toggleNodeCompletion(entry.id) },
                             onSkip = { nodeId -> viewModel.skipNode(nodeId) },
                             onPostpone = { nodeId, mins -> viewModel.postponeNode(nodeId, mins) },
-                            onReschedule = { nodeId -> viewModel.rescheduleNode(nodeId, "18:00") },
+                            onCustomizeSchedule = { _ -> showCustomizeSheet = entry },
                             onDurationChange = { nodeId, mins -> viewModel.changeDuration(nodeId, mins) },
                             onAdjustDuration = { nodeId, delta -> viewModel.adjustNodeDuration(nodeId, delta) },
                             onPlanningToggle = { taskId -> viewModel.togglePlanningTask(taskId) },
-                            onResolveConflict = { resolution -> viewModel.resolveConflict(entry.id, resolution) }
+                            onResolveConflict = { resolution -> viewModel.resolveConflict(entry.id, resolution) },
+                            onEditSpontaneous = { _ -> editingEvent = entry; showEventSheet = true },
+                            onDeleteSpontaneous = { nodeId -> showDeleteConfirm = nodeId }
                         )
                     }
                 }
@@ -244,6 +250,17 @@ fun TodayScreen(
         )
     }
 
+    if (showCustomizeSheet != null) {
+        CustomizeScheduleSheet(
+            entry = showCustomizeSheet!!,
+            onDismiss = { showCustomizeSheet = null },
+            onConfirm = { start, end ->
+                viewModel.customizeSchedule(showCustomizeSheet!!.id, start, end)
+                showCustomizeSheet = null
+            }
+        )
+    }
+
     if (showActivityPicker != null) {
         ActivityPickerSheet(
             entries = uiState.timelineEntries,
@@ -253,7 +270,10 @@ fun TodayScreen(
                 showActivityPicker = null
                 when (action) {
                     "skip" -> viewModel.skipNode(entryId)
-                    "reschedule" -> viewModel.rescheduleNode(entryId, "18:00")
+                    "reschedule" -> {
+                        val entry = uiState.timelineEntries.find { it.id == entryId }
+                        if (entry != null) showCustomizeSheet = entry
+                    }
                     "extend" -> viewModel.adjustNodeDuration(entryId, 15)
                     "reduce" -> viewModel.adjustNodeDuration(entryId, -15)
                 }
@@ -263,11 +283,47 @@ fun TodayScreen(
 
     if (showEventSheet) {
         NewSpontaneousEventSheet(
-            onDismiss = { showEventSheet = false },
-            onConfirm = { title, time, dur ->
-                viewModel.createSpontaneousEvent(title, time, dur)
+            editingEvent = editingEvent,
+            onDismiss = { 
                 showEventSheet = false
+                editingEvent = null
+            },
+            onConfirm = { title, time, dur ->
+                if (editingEvent != null) {
+                    viewModel.updateSpontaneousEvent(editingEvent!!.id, title, time, dur)
+                } else {
+                    viewModel.createSpontaneousEvent(title, time, dur)
+                }
+                showEventSheet = false
+                editingEvent = null
             }
+        )
+    }
+
+    if (showDeleteConfirm != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = null },
+            title = { Text("Eliminar evento espontáneo") },
+            text = { Text("¿Estás seguro de que quieres eliminar este evento? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteSpontaneousEvent(showDeleteConfirm!!)
+                        showDeleteConfirm = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("ELIMINAR")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = null }) {
+                    Text("CANCELAR")
+                }
+            },
+            containerColor = ColorSurface,
+            titleContentColor = ColorText,
+            textContentColor = ColorTextDim
         )
     }
 
@@ -401,9 +457,9 @@ fun TodayQuickActionsSheet(onDismiss: () -> Unit, onAction: (String) -> Unit) {
             Text("Sobre actividades planeadas", style = MetaMono.copy(fontSize = 10.sp), color = ColorTextDim)
             Spacer(Modifier.height(8.dp))
             QuickActionRow("Omitir actividad", Icons.Default.Block, "Saltar algo de hoy") { onAction("skip") }
-            QuickActionRow("Ajustar horario", Icons.Default.Schedule, "Mover hora de inicio") { onAction("reschedule") }
-            QuickActionRow("Extender tiempo", Icons.Default.Add, "Dar más minutos") { onAction("extend") }
-            QuickActionRow("Reducir tiempo", Icons.Default.Remove, "Acortar duración") { onAction("reduce") }
+            QuickActionRow("Personalizar horario", Icons.Default.Schedule, "Define inicio y fin") { onAction("reschedule") }
+            QuickActionRow("Extender tiempo", Icons.Default.Add, "Suma 15 minutos") { onAction("extend") }
+            QuickActionRow("Reducir tiempo", Icons.Default.Remove, "Resta 15 minutos") { onAction("reduce") }
         }
     }
 }
@@ -458,14 +514,81 @@ fun ActivityPickerSheet(entries: List<TimelineEntryUi>, onDismiss: () -> Unit, o
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NewSpontaneousEventSheet(onDismiss: () -> Unit, onConfirm: (String, String, Int) -> Unit) {
-    var title by remember { mutableStateOf("") }
-    var time by remember { mutableStateOf("12:00") }
-    var duration by remember { mutableIntStateOf(60) }
+fun CustomizeScheduleSheet(
+    entry: TimelineEntryUi,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String) -> Unit
+) {
+    val initialStart = remember(entry) { entry.time.split("-").firstOrNull()?.trim() ?: "12:00" }
+    val initialEnd = remember(entry) { entry.time.split("-").getOrNull(1)?.trim() ?: entry.endTime ?: "13:00" }
+    
+    var startTime by remember { mutableStateOf(initialStart) }
+    var endTime by remember { mutableStateOf(initialEnd) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ColorSurface) {
         Column(Modifier.padding(24.dp).padding(bottom = 40.dp)) {
-            Text("Nuevo Evento Hoy", style = TitleNode)
+            Text("Personalizar horario", style = TitleNode)
+            Text(entry.title, style = MetaMono.copy(fontSize = 12.sp), color = ColorTextDim)
+            Spacer(Modifier.height(24.dp))
+            
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                OutlinedTextField(
+                    value = startTime, 
+                    onValueChange = { startTime = it }, 
+                    label = { Text("Inicio") }, 
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = endTime, 
+                    onValueChange = { endTime = it }, 
+                    label = { Text("Fin") }, 
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            
+            Spacer(Modifier.height(24.dp))
+            
+            Button(
+                onClick = { onConfirm(startTime, endTime) }, 
+                modifier = Modifier.fillMaxWidth().height(56.dp), 
+                colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("GUARDAR HORARIO") }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NewSpontaneousEventSheet(
+    editingEvent: TimelineEntryUi? = null,
+    onDismiss: () -> Unit,
+    onConfirm: (String, String, Int) -> Unit
+) {
+    var title by remember { mutableStateOf(editingEvent?.title ?: "") }
+    var time by remember { mutableStateOf(editingEvent?.time?.split(" ")?.firstOrNull() ?: "12:00") }
+    
+    // Attempt to parse duration from time label if it's "HH:MM - HH:MM"
+    val initialDuration = remember(editingEvent) {
+        if (editingEvent?.time?.contains("-") == true) {
+             try {
+                 val parts = editingEvent.time.split("-").map { it.trim() }
+                 val startMins = com.alan.routineos.core.util.ScheduleResolver.timeToMinutes(parts[0])
+                 val endMins = com.alan.routineos.core.util.ScheduleResolver.timeToMinutes(parts[1])
+                 var diff = endMins - startMins
+                 if (diff < 0) diff += 1440
+                 diff
+             } catch (e: Exception) { 60 }
+        } else {
+            60
+        }
+    }
+    
+    var duration by remember { mutableIntStateOf(initialDuration) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = ColorSurface) {
+        Column(Modifier.padding(24.dp).padding(bottom = 40.dp)) {
+            Text(if (editingEvent != null) "Editar Evento" else "Nuevo Evento Hoy", style = TitleNode)
             Spacer(Modifier.height(16.dp))
             OutlinedTextField(
                 value = title, 
@@ -496,7 +619,7 @@ fun NewSpontaneousEventSheet(onDismiss: () -> Unit, onConfirm: (String, String, 
                 enabled = title.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = ColorExec),
                 shape = RoundedCornerShape(12.dp)
-            ) { Text("CREAR EVENTO SOLO HOY") }
+            ) { Text(if (editingEvent != null) "GUARDAR CAMBIOS" else "CREAR EVENTO SOLO HOY") }
         }
     }
 }

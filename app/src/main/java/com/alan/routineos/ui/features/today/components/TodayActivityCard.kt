@@ -52,16 +52,19 @@ fun TodayActivityCard(
     conflictResolutionSuggestions: List<ConflictResolutionUi> = emptyList(),
     planningInfo: PlanningIndicatorUi? = null,
     resolvedNodes: List<ResolvedNodeUi> = emptyList(),
+    isSpontaneousEvent: Boolean = false,
     onNodeToggle: (String) -> Unit = {},
     onNodeClick: (String) -> Unit = {},
     onComplete: () -> Unit = {},
     onSkip: (String) -> Unit = {},
     onPostpone: (String, Int) -> Unit = { _, _ -> },
-    onReschedule: (String) -> Unit = {},
+    onCustomizeSchedule: (String) -> Unit = {},
     onDurationChange: (String, Int) -> Unit = { _, _ -> },
     onAdjustDuration: (String, Int) -> Unit = { _, _ -> },
     onPlanningToggle: (String) -> Unit = {},
-    onResolveConflict: (ConflictResolutionUi) -> Unit = {}
+    onResolveConflict: (ConflictResolutionUi) -> Unit = {},
+    onEditSpontaneous: (String) -> Unit = {},
+    onDeleteSpontaneous: (String) -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(true) }
     var showMenu by remember { mutableStateOf(false) }
@@ -259,9 +262,12 @@ fun TodayActivityCard(
                                     onDismiss = { showMenu = false },
                                     onPostpone = { onPostpone(id, it) },
                                     onSkip = { onSkip(id) },
-                                    onReschedule = { onReschedule(id) },
+                                    onCustomizeSchedule = { onCustomizeSchedule(id) },
                                     onDurationChange = { onDurationChange(id, it) },
-                                    onAdjustDuration = { onAdjustDuration(id, it) }
+                                    onAdjustDuration = { onAdjustDuration(id, it) },
+                                    isSpontaneousEvent = isSpontaneousEvent,
+                                    onEditSpontaneous = { onEditSpontaneous(id) },
+                                    onDeleteSpontaneous = { onDeleteSpontaneous(id) }
                                 )
                             }
 
@@ -376,7 +382,7 @@ fun TodayActivityCard(
                                                     onDismiss = { showMenu = false },
                                                     onPostpone = { onPostpone(node.id, it) },
                                                     onSkip = { onSkip(node.id) },
-                                                    onReschedule = { onReschedule(node.id) },
+                                                    onCustomizeSchedule = { onCustomizeSchedule(node.id) },
                                                     onDurationChange = { onDurationChange(node.id, it) },
                                                     onAdjustDuration = { onAdjustDuration(node.id, it) }
                                                 )
@@ -649,15 +655,32 @@ fun QuickActionsMenu(
     onDismiss: () -> Unit,
     onPostpone: (Int) -> Unit,
     onSkip: () -> Unit,
-    onReschedule: () -> Unit,
+    onCustomizeSchedule: () -> Unit,
     onDurationChange: (Int) -> Unit,
-    onAdjustDuration: (Int) -> Unit
+    onAdjustDuration: (Int) -> Unit,
+    isSpontaneousEvent: Boolean = false,
+    onEditSpontaneous: () -> Unit = {},
+    onDeleteSpontaneous: () -> Unit = {}
 ) {
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
         modifier = Modifier.background(ColorSurface).border(0.5.dp, ColorBorder, RoundedCornerShape(8.dp))
     ) {
+        if (isSpontaneousEvent) {
+            DropdownMenuItem(
+                text = { Text("Editar evento", style = TitleNode.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold)) },
+                onClick = { onEditSpontaneous(); onDismiss() },
+                leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(18.dp), tint = ColorExec) }
+            )
+            DropdownMenuItem(
+                text = { Text("Eliminar evento", style = TitleNode.copy(fontSize = 12.sp, color = Color.Red)) },
+                onClick = { onDeleteSpontaneous(); onDismiss() },
+                leadingIcon = { Icon(Icons.Default.Delete, null, modifier = Modifier.size(18.dp), tint = Color.Red) }
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = ColorBorder.copy(alpha = 0.5f))
+        }
+
         DropdownMenuItem(
             text = { Text("Posponer 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
             onClick = { onPostpone(15); onDismiss() },
@@ -669,17 +692,17 @@ fun QuickActionsMenu(
             leadingIcon = { Icon(Icons.Default.History, null, modifier = Modifier.size(18.dp)) }
         )
         DropdownMenuItem(
-            text = { Text("Extender 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            text = { Text("Extender 15 min (+)", style = TitleNode.copy(fontSize = 12.sp)) },
             onClick = { onAdjustDuration(15); onDismiss() },
             leadingIcon = { Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp)) }
         )
         DropdownMenuItem(
-            text = { Text("Reducir 15 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            text = { Text("Reducir 15 min (-)", style = TitleNode.copy(fontSize = 12.sp)) },
             onClick = { onAdjustDuration(-15); onDismiss() },
             leadingIcon = { Icon(Icons.Default.Remove, null, modifier = Modifier.size(18.dp)) }
         )
         DropdownMenuItem(
-            text = { Text("Recortar a 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
+            text = { Text("Ajustar duración a 30 min", style = TitleNode.copy(fontSize = 12.sp)) },
             onClick = { onDurationChange(30); onDismiss() },
             leadingIcon = { Icon(Icons.Default.Timer, null, modifier = Modifier.size(18.dp)) }
         )
@@ -689,8 +712,8 @@ fun QuickActionsMenu(
             leadingIcon = { Icon(Icons.Default.Block, null, modifier = Modifier.size(18.dp)) }
         )
         DropdownMenuItem(
-            text = { Text("Mover hora", style = TitleNode.copy(fontSize = 12.sp)) },
-            onClick = { onReschedule(); onDismiss() },
+            text = { Text("Personalizar horario", style = TitleNode.copy(fontSize = 12.sp)) },
+            onClick = { onCustomizeSchedule(); onDismiss() },
             leadingIcon = { Icon(Icons.Default.Event, null, modifier = Modifier.size(18.dp)) }
         )
     }

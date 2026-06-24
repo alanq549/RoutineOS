@@ -188,6 +188,7 @@ class TemplateBuilderViewModel @Inject constructor(
     }
 
     fun addNode(name: String, typeId: String, parentId: String?) {
+        Log.d("BUILDER_DEBUG", "ACTION: addNode - name: $name, type: $typeId, parent: $parentId")
         val currentNodes = _uiState.value.nodes
         val position = currentNodes.count { it.parentId == parentId }
         val newNode = Node(
@@ -200,24 +201,39 @@ class TemplateBuilderViewModel @Inject constructor(
             syncStatus = SyncStatus.PENDING_SYNC
         )
         _uiState.update { it.copy(nodes = it.nodes + newNode, hasUnsavedChanges = true) }
+        logNodeDetailSimple("BUILDER_DEBUG", "AFTER_ADD_NODE", newNode)
     }
 
     fun updateNodeName(nodeId: String, newName: String) {
+        Log.d("BUILDER_DEBUG", "ACTION: updateNodeName - nodeId: $nodeId, newName: $newName")
+        val nodeBefore = _uiState.value.nodes.find { it.id == nodeId }
+        nodeBefore?.let { logNodeDetailSimple("BUILDER_DEBUG", "BEFORE_NAME_UPDATE", it) }
+        
         _uiState.update { state ->
             state.copy(
                 nodes = state.nodes.map { if (it.id == nodeId) it.copy(name = newName) else it },
                 hasUnsavedChanges = true
             )
         }
+
+        val nodeAfter = _uiState.value.nodes.find { it.id == nodeId }
+        nodeAfter?.let { logNodeDetailSimple("BUILDER_DEBUG", "AFTER_NAME_UPDATE", it) }
     }
 
     fun updateNodeType(nodeId: String, newTypeId: String) {
+        Log.d("BUILDER_DEBUG", "ACTION: updateNodeType - nodeId: $nodeId, newType: $newTypeId")
+        val nodeBefore = _uiState.value.nodes.find { it.id == nodeId }
+        nodeBefore?.let { logNodeDetailSimple("BUILDER_DEBUG", "BEFORE_TYPE_UPDATE", it) }
+
         _uiState.update { state ->
             state.copy(
                 nodes = state.nodes.map { if (it.id == nodeId) it.copy(typeId = newTypeId) else it },
                 hasUnsavedChanges = true
             )
         }
+
+        val nodeAfter = _uiState.value.nodes.find { it.id == nodeId }
+        nodeAfter?.let { logNodeDetailSimple("BUILDER_DEBUG", "AFTER_TYPE_UPDATE", it) }
     }
 
     fun updateFieldValue(nodeId: String, schemaId: String, fieldName: String, value: String) {
@@ -241,6 +257,10 @@ class TemplateBuilderViewModel @Inject constructor(
     }
 
     fun deleteNode(nodeId: String) {
+        Log.d("BUILDER_DEBUG", "ACTION: deleteNode - nodeId: $nodeId")
+        val nodeBefore = _uiState.value.nodes.find { it.id == nodeId }
+        nodeBefore?.let { logNodeDetailSimple("BUILDER_DEBUG", "BEFORE_DELETE", it) }
+
         val toDelete = mutableSetOf(nodeId)
         var added = true
         while (added) {
@@ -260,6 +280,7 @@ class TemplateBuilderViewModel @Inject constructor(
                 hasUnsavedChanges = true
             )
         }
+        Log.d("BUILDER_DEBUG", "AFTER_DELETE: Removed ${toDelete.size} nodes")
     }
 
     fun updateNodeSchedules(nodeId: String, schedules: List<NodeSchedule>) {
@@ -294,12 +315,27 @@ class TemplateBuilderViewModel @Inject constructor(
         }
     }
 
+    private fun logNodeDetailSimple(tag: String, prefix: String, node: Node) {
+        val children = _uiState.value.nodes.filter { it.parentId == node.id }
+        val details = """
+            $prefix
+            ID: ${node.id} | NAME: ${node.name} | PARENT: ${node.parentId}
+            TEMPLATE: ${node.templateId} | TYPE: ${node.typeId}
+            MODE: ${node.temporalMode} | SEQ: ${node.isSequential} | POS: ${node.position}
+            TIME: ${node.scheduledTime} | DUR: ${node.durationMinutes} | STATUS: ${node.status}
+            CHILDREN: ${children.map { it.name }}
+        """.trimIndent()
+        Log.d(tag, details)
+    }
+
     fun saveTemplate(onSuccess: (() -> Unit)? = null) {
+        Log.d("BUILDER_DEBUG", "ACTION: saveTemplate - templateId: ${_uiState.value.templateId}")
         viewModelScope.launch {
             try {
                 _uiState.update { it.copy(isSaving = true) }
                 val state = _uiState.value
                 val finalTemplateId = state.templateId ?: UUID.randomUUID().toString()
+                Log.d("BUILDER_DEBUG", "ACTION: saving template $finalTemplateId with ${state.nodes.size} nodes")
 
                 val currentTemplate = state.templateId?.let { templateRepo.getById(it) }
                 val rootNodeId = currentTemplate?.rootNodeId ?: UUID.randomUUID().toString()
